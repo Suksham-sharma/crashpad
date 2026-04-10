@@ -1,0 +1,107 @@
+@import "tailwindcss";
+
+/* Design tokens. Tailwind v4 exposes these as utility classes (bg-bg-void,
+   text-fg-0, etc). */
+@theme {
+  /* Tonal depth scale — deepest to brightest */
+  --color-bg-void: #0a0a0a;
+  --color-bg-0: #0e0e0e;
+  --color-bg-1: #131313;
+  --color-bg-2: #1c1b1b;
+  --color-bg-3: #201f1f;
+  --color-bg-4: #2a2a2a;
+  --color-bg-5: #353534;
+
+  /* Text */
+  --color-fg-0: #fafafa;
+  --color-fg-1: #a1a1a1;
+  --color-fg-2: #666666;
+
+  /* Borders */
+  --color-border-ghost: rgba(88, 66, 55, 0.15);
+  --color-border-strong: #353534;
+
+  /* Accent */
+  --color-accent: #f97316;
+  --color-accent-hover: #ffdbca;
+  --color-accent-fg: #552100;
+  --color-accent-muted: rgba(249, 115, 22, 0.08);
+
+  /* Status */
+  --color-status-open: #f97316;
+  --color-status-resolved: #22c55e;
+  --color-status-ignored: #a1a1a1;
+  --color-error: #ef4444;
+  --color-warning: #eab308;
+
+  /* Typography — 3 families locked after Stitch mockup review */
+  --font-display: "Space Grotesk", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", Menlo, monospace;
+
+  /* Font sizes */
+  --text-xxs: 10px;
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 14px;
+  --text-md: 16px;
+  --text-lg: 20px;
+  --text-xl: 32px;
+
+  /* Radius — ZERO everywhere, no exceptions */
+  --radius-none: 0px;
+  --radius-full: 9999px;
+
+  /* Motion */
+  --duration-instant: 100ms;
+}
+
+html {
+  background: var(--color-bg-void);
+  color: var(--color-fg-0);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background: var(--color-bg-void);
+  color: var(--color-fg-0);
+}
+
+/* Scrollbars — thin, muted, always-visible on dark */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-bg-void);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-bg-5);
+}
+
+/* Selection — orange tint, dark text */
+::selection {
+  background: var(--color-accent);
+  color: var(--color-accent-fg);
+}
+
+/* Focus rings — sharp 1px accent inset, keyboard-only */
+:focus-visible {
+  outline: 1px solid var(--color-accent);
+  outline-offset: 0;
+}
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Respect reduced motion — disable the decorative animations, keep hover transitions */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "name": "@crashpad/sdk",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Browser SDK for Crashpad error monitoring with session replay",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "build": "bun build src/index.ts --target=browser --outdir=dist --minify",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  }
+}

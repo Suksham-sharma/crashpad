@@ -1,0 +1,8 @@
+[install]
+# Use the workspace protocol for internal packages
+registry = "https://registry.npmjs.org/"
+
+[test]
+# Bun test defaults
+preload = []
+coverage = false
