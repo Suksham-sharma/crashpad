@@ -2,7 +2,6 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '../db';
 import { projects, type Project } from '../db/schema';
 
-// cp_ prefix makes leaked keys instantly greppable for GitHub secret scanning.
 const API_KEY_PREFIX = 'cp_';
 
 function generateApiKey(): string {

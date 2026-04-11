@@ -1,59 +1,52 @@
-import { Elysia, t } from 'elysia';
-import { requireAuth } from '../middleware/auth';
+import { Elysia } from 'elysia';
+import { authGuard } from '../middleware/auth-guard';
 import {
   createProject,
   deleteProjectForUser,
   getProjectForUser,
   listProjectsForUser,
-} from '../services/projects';
+} from '../controllers/projects';
+import { createProjectBody, projectIdParams } from '../schemas/projects';
 
 export const projectRoutes = new Elysia({ prefix: '/api/v1/projects' })
-  .use(requireAuth)
-  .get('/', async ({ currentUser }) => {
-    const rows = await listProjectsForUser(currentUser.id);
-    return { projects: rows };
-  })
+  .use(authGuard)
+  .get(
+    '/',
+    async ({ user }) => {
+      const rows = await listProjectsForUser(user.id);
+      return { projects: rows };
+    },
+    { auth: true },
+  )
   .post(
     '/',
-    async ({ currentUser, body }) => {
-      const project = await createProject(currentUser.id, body.name);
+    async ({ user, body }) => {
+      const project = await createProject(user.id, body.name);
       return { project };
     },
-    {
-      body: t.Object({
-        name: t.String({ minLength: 1, maxLength: 100 }),
-      }),
-    },
+    { body: createProjectBody, auth: true },
   )
   .get(
     '/:id',
-    async ({ currentUser, params, set }) => {
-      const project = await getProjectForUser(params.id, currentUser.id);
+    async ({ user, params, set }) => {
+      const project = await getProjectForUser(params.id, user.id);
       if (!project) {
         set.status = 404;
         return { error: 'not_found' };
       }
       return { project };
     },
-    {
-      params: t.Object({
-        id: t.String({ format: 'uuid' }),
-      }),
-    },
+    { params: projectIdParams, auth: true },
   )
   .delete(
     '/:id',
-    async ({ currentUser, params, set }) => {
-      const ok = await deleteProjectForUser(params.id, currentUser.id);
+    async ({ user, params, set }) => {
+      const ok = await deleteProjectForUser(params.id, user.id);
       if (!ok) {
         set.status = 404;
         return { error: 'not_found' };
       }
       return { ok: true };
     },
-    {
-      params: t.Object({
-        id: t.String({ format: 'uuid' }),
-      }),
-    },
+    { params: projectIdParams, auth: true },
   );

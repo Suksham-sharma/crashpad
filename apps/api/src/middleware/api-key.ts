@@ -1,5 +1,5 @@
 import { Elysia } from 'elysia';
-import { findProjectByApiKey } from '../services/projects';
+import { findProjectByApiKey } from '../controllers/projects';
 import type { Project } from '../db/schema';
 
 // Reads `Authorization: Bearer cp_...`. Used on ingest routes, not dashboard.

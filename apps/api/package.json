@@ -16,6 +16,7 @@
   "dependencies": {
     "@elysiajs/cors": "^1.1.0",
     "@elysiajs/jwt": "^1.4.1",
+    "better-auth": "^1.6.2",
     "drizzle-orm": "^0.45.2",
     "elysia": "^1.1.0",
     "postgres": "^3.4.9"

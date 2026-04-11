@@ -2,11 +2,13 @@ import { Elysia } from 'elysia';
 import { cors } from '@elysiajs/cors';
 import { env } from './env';
 import { sql, closeDb } from './db';
-import { authRoutes } from './routes/auth';
+import { auth } from './auth';
 import { projectRoutes } from './routes/projects';
 import { meRoute } from './routes/me';
+import { eventRoutes } from './routes/events';
+import { replayRoutes } from './routes/replays';
+import { sourceMapRoutes } from './routes/sourcemaps';
 
-// Fast SELECT 1 so Better Uptime catches db outages, not just http outages. Never throws.
 async function dbHealthy(): Promise<boolean> {
   try {
     await sql`SELECT 1`;
@@ -16,17 +18,16 @@ async function dbHealthy(): Promise<boolean> {
   }
 }
 
-const app = new Elysia()
+const app = new Elysia({
+  serve: { maxRequestBodySize: 25 * 1024 * 1024 },
+})
   .use(
-    // Dashboard routes need credentials (the session cookie). The SDK ingest
-    // routes use Authorization headers, which don't need credentials:true but
-    // happily work under it too. For now we allow any origin in dev — we'll
-    // tighten to the configured WEB_URL in prod once deploy is wired up.
     cors({
-      origin: true,
+      origin: env.WEB_URL,
       credentials: true,
     }),
   )
+  .mount(auth.handler)
   .get('/health', async ({ set }) => {
     const db = await dbHealthy();
     if (!db) {
@@ -51,9 +52,11 @@ const app = new Elysia()
     name: 'crashpad-api',
     docs: 'https://github.com/suksham/crashpad',
   }))
-  .use(authRoutes)
   .use(meRoute)
   .use(projectRoutes)
+  .use(eventRoutes)
+  .use(replayRoutes)
+  .use(sourceMapRoutes)
   .listen(env.PORT);
 
 console.log(

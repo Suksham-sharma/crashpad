@@ -1,6 +1,3 @@
-// Typed env loader. Validates required vars at startup — a missing var should
-// crash boot, not fail the first request under load.
-
 function required(name: string): string {
   const value = process.env[name];
   if (!value) {
@@ -23,13 +20,10 @@ export const env = {
     | 'test',
   DATABASE_URL: required('DATABASE_URL'),
   REDIS_URL: optional('REDIS_URL', 'redis://localhost:6379'),
-  JWT_SECRET: required('JWT_SECRET'),
+  BETTER_AUTH_SECRET: required('BETTER_AUTH_SECRET'),
+  BETTER_AUTH_URL: optional('BETTER_AUTH_URL', 'http://localhost:4000'),
   GITHUB_CLIENT_ID: required('GITHUB_CLIENT_ID'),
   GITHUB_CLIENT_SECRET: required('GITHUB_CLIENT_SECRET'),
-  GITHUB_OAUTH_REDIRECT: optional(
-    'GITHUB_OAUTH_REDIRECT',
-    'http://localhost:4000/api/v1/auth/github/callback',
-  ),
   WEB_URL: optional('WEB_URL', 'http://localhost:3000'),
 } as const;
 
