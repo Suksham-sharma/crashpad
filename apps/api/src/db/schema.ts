@@ -182,6 +182,9 @@ export interface EventMetadata {
   };
 }
 
+// events and replays are linked by correlation_id, NOT a foreign key. The SDK
+// stamps the same UUID on both payloads; the server joins on read. This avoids
+// the split-payload race where the replay arrives before (or after) the event.
 export const events = pgTable(
   'events',
   {

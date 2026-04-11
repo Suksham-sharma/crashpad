@@ -1,118 +1,109 @@
 /**
- * @crashpad/sdk entry point.
+ * `@crashpad/sdk` — browser SDK for Crashpad error monitoring with session replay.
  *
- * Browser-only in v1. Node.js entry is explicitly not in scope until v2+.
+ * Browser-only in v1. A Node.js entry point is explicitly out of scope until v2.
  *
- * Usage:
- *   import Crashpad from '@crashpad/sdk';
- *   Crashpad.init({
- *     apiKey: process.env.NEXT_PUBLIC_CRASHPAD_API_KEY!,
- *     release: process.env.NEXT_PUBLIC_CRASHPAD_RELEASE,
- *     environment: process.env.NODE_ENV,
- *   });
+ * @example
+ * ```ts
+ * import Crashpad from '@crashpad/sdk';
  *
- * The init() call is a stub in this scaffold — wire up capture + transport
- * + replay in the next implementation pass.
+ * Crashpad.init({
+ *   apiKey: process.env.NEXT_PUBLIC_CRASHPAD_API_KEY!,
+ *   release: process.env.NEXT_PUBLIC_CRASHPAD_RELEASE,
+ *   environment: process.env.NODE_ENV,
+ * });
+ * ```
+ *
+ * The SDK never throws into the host app. Every public entry point is
+ * wrapped in a try/catch — failures degrade silently (or log to console
+ * when `debug: true`) instead of crashing the page.
  */
 import type { CrashpadConfig } from './core/types';
+import { setConfig, getConfig, resetConfig } from './core/config';
+import { installCapture, uninstallCapture, report } from './core/capture';
+import { startReplay, stopReplay } from './core/replay';
+import { safe } from './core/safe';
 
 export type { CrashpadConfig, EventPayload, ReplayPayload } from './core/types';
 
-const DEFAULT_API_URL = 'https://api.crashpad.dev';
-
 let initialized = false;
-let currentConfig: Required<
-  Pick<CrashpadConfig, 'apiKey' | 'apiUrl' | 'replay' | 'debug'>
-> &
-  Pick<CrashpadConfig, 'release' | 'environment'> = {
-  apiKey: '',
-  apiUrl: DEFAULT_API_URL,
-  replay: true,
-  debug: false,
-};
 
 /**
- * Initialize the Crashpad SDK. Must be called once, as early as possible in
- * your app's lifecycle. Subsequent calls are ignored with a console warning
- * (in debug mode) to avoid double-init bugs.
+ * Initialize the Crashpad SDK. Call once, as early as possible in your
+ * app's lifecycle (typically at the top of your entry module).
  *
- * The SDK MUST NOT throw into the host app. Every branch below is wrapped in
- * try/catch. Failures degrade gracefully: the SDK disables itself instead of
- * crashing the page.
+ * Installs `window.error` and `unhandledrejection` listeners, and — if
+ * `config.replay !== false` — starts the rrweb circular buffer during
+ * the next idle frame so it doesn't block first paint.
+ *
+ * Subsequent calls are no-ops. Calling without an `apiKey` is a no-op.
+ * The SDK never throws, even if init fails — the host app keeps running.
  */
 function init(config: CrashpadConfig): void {
-  try {
-    if (initialized) {
-      if (currentConfig.debug) {
-        // eslint-disable-next-line no-console
-        console.warn('[crashpad] init() called twice, ignoring second call');
-      }
-      return;
-    }
+  safe(() => {
+    if (initialized) return;
+    if (!config || !config.apiKey) return;
 
-    if (!config.apiKey) {
-      if (config.debug) {
-        // eslint-disable-next-line no-console
-        console.warn('[crashpad] init() called without apiKey, disabling SDK');
-      }
-      return;
-    }
-
-    currentConfig = {
-      apiKey: config.apiKey,
-      apiUrl: config.apiUrl ?? DEFAULT_API_URL,
-      replay: config.replay ?? true,
-      debug: config.debug ?? false,
-      release: config.release,
-      environment: config.environment,
-    };
+    const resolved = setConfig(config);
+    installCapture();
+    if (resolved.replay) startReplay();
 
     initialized = true;
-
-    if (currentConfig.debug) {
-      // eslint-disable-next-line no-console
-      console.info('[crashpad] initialized', {
-        apiUrl: currentConfig.apiUrl,
-        release: currentConfig.release,
-        environment: currentConfig.environment,
-        replay: currentConfig.replay,
-      });
-    }
-
-    // TODO(week-1): wire up capture + transport + replay buffer here
-    //   - window.onerror + unhandledrejection handlers
-    //   - batched HTTP transport with retry + sendBeacon fallback
-    //   - rrweb dynamic import (requestIdleCallback) + circular buffer
-    //   - PII masking config (maskAllInputs: true)
-    //   - correlation UUID generation per error
-  } catch (err) {
-    // Graceful failure — never throw into the host app.
-    if (config.debug) {
-      // eslint-disable-next-line no-console
-      console.error('[crashpad] init failed', err);
-    }
-  }
+  });
 }
 
 /**
- * Manually capture an exception. Useful for try/catch blocks where you want
- * to report a caught error without letting it bubble up.
+ * Manually capture an exception. Useful for `try`/`catch` blocks where
+ * you've handled an error but still want it reported.
  *
- * Stub in this scaffold.
+ * The error is normalized, assigned a fresh `correlationId`, and sent
+ * through the same pipeline as auto-captured errors (event + replay
+ * snapshot). No-op if called before {@link init}.
+ *
+ * @example
+ * ```ts
+ * try {
+ *   await riskyOperation();
+ * } catch (err) {
+ *   Crashpad.captureException(err);
+ *   showFallbackUi();
+ * }
+ * ```
  */
-function captureException(_error: unknown): void {
-  try {
+function captureException(error: unknown): void {
+  safe(() => {
     if (!initialized) return;
-    // TODO(week-1): wire up manual capture path
-  } catch {
-    // swallow
-  }
+    void report(error);
+  });
+}
+
+/**
+ * Tear down the SDK. Removes error listeners, stops the replay buffer,
+ * and clears the active config. Useful for tests and for hot-module
+ * reload scenarios. Rarely needed in production code.
+ */
+function shutdown(): void {
+  safe(() => {
+    uninstallCapture();
+    stopReplay();
+    resetConfig();
+    initialized = false;
+  });
+}
+
+/**
+ * `true` if {@link init} has run successfully and the SDK is active.
+ */
+function isInitialized(): boolean {
+  return initialized && getConfig() !== null;
 }
 
 const Crashpad = {
   init,
   captureException,
+  shutdown,
+  isInitialized,
 };
 
 export default Crashpad;
-export { init, captureException };
+export { init, captureException, shutdown, isInitialized };
