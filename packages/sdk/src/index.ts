@@ -46,7 +46,7 @@ function init(config: CrashpadConfig): void {
 
     const resolved = setConfig(config);
     installCapture();
-    if (resolved.replay) startReplay();
+    if (resolved.replay) startReplay(resolved.maskInputs);
 
     initialized = true;
   });

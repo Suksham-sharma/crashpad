@@ -40,7 +40,10 @@ function scheduleIdle(fn: () => void): void {
   setTimeout(fn, 0);
 }
 
-export function startReplay(onError?: (err: unknown) => void): void {
+export function startReplay(
+  maskInputs: boolean,
+  onError?: (err: unknown) => void,
+): void {
   if (stopFn || starting) return;
   starting = true;
   scheduleIdle(() => {
@@ -55,7 +58,7 @@ export function startReplay(onError?: (err: unknown) => void): void {
               prune();
             }, onError);
           },
-          maskAllInputs: true,
+          maskAllInputs: maskInputs,
           checkoutEveryNms: BUFFER_WINDOW_MS,
         });
         stopFn = stop ?? null;

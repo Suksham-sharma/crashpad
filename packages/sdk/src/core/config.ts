@@ -11,6 +11,7 @@ export function setConfig(input: CrashpadConfig): ResolvedConfig {
     release: input.release ?? null,
     environment: input.environment ?? null,
     replay: input.replay ?? true,
+    maskInputs: input.maskInputs ?? true,
     debug: input.debug ?? false,
   };
   active = resolved;

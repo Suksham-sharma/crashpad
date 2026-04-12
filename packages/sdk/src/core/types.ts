@@ -64,6 +64,25 @@ export interface CrashpadConfig {
   replay?: boolean;
 
   /**
+   * Mask all form input values in the replay stream. Default `true`.
+   *
+   * When enabled, every `<input>`, `<textarea>`, and `<select>` value
+   * is replaced with asterisks in the recorded events — passwords,
+   * credit card numbers, and any other text users type into forms
+   * never leave the browser.
+   *
+   * Set to `false` ONLY if you are certain no PII is ever entered into
+   * form fields in your app. Flipping this off in a production app
+   * that handles real user input is a data-leak risk.
+   *
+   * Note: this setting controls INPUT values only. Rendered text nodes
+   * (e.g. `<div>{user.email}</div>`) are not masked in v1 — if you
+   * render PII into the DOM, it will be captured in the replay. Keep
+   * PII out of the rendered tree if you need it out of replays.
+   */
+  maskInputs?: boolean;
+
+  /**
    * Enable debug logging to `console`. Default `false`.
    *
    * Logs init, capture, and transport status messages. Never enable in
@@ -82,6 +101,7 @@ export interface ResolvedConfig {
   release: string | null;
   environment: string | null;
   replay: boolean;
+  maskInputs: boolean;
   debug: boolean;
 }
 
