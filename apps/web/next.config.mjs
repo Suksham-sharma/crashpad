@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -13,7 +15,14 @@ const nextConfig = {
   // as the workspace root, which breaks file tracing for the build output.
   outputFileTracingRoot: path.join(__dirname, '../..'),
   env: {
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000',
+    NEXT_PUBLIC_API_URL: API_URL,
+  },
+  // Proxy /api/* to the Elysia API so browser requests are same-origin.
+  // Avoids cross-origin cookie gymnastics (SameSite=None + HTTPS) in dev.
+  async rewrites() {
+    return [
+      { source: '/api/:path*', destination: `${API_URL}/api/:path*` },
+    ];
   },
 };
 
