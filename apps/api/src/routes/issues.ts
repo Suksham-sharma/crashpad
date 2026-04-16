@@ -16,9 +16,9 @@ import {
 export const issueRoutes = new Elysia({ prefix: '/api/v1' })
   .use(authGuard)
   .get(
-    '/projects/:projectId/issues',
+    '/projects/:id/issues',
     async ({ user, params, query, set }) => {
-      const project = await getProjectForUser(params.projectId, user.id);
+      const project = await getProjectForUser(params.id, user.id);
       if (!project) {
         set.status = 404;
         return { error: 'not_found' };

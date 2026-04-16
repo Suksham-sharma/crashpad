@@ -1,7 +1,7 @@
 import { t } from 'elysia';
 
 export const projectIssuesParams = t.Object({
-  projectId: t.String({ format: 'uuid' }),
+  id: t.String({ format: 'uuid' }),
 });
 
 export const issueIdParams = t.Object({
