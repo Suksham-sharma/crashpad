@@ -57,3 +57,6 @@ DESIGN.md
 *.ai-context.md
 .gstack/
 .claude/
+
+# Local spikes / scratch
+spike/
