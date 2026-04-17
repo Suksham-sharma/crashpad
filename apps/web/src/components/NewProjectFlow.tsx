@@ -1,75 +1,65 @@
 'use client';
 
+import clsx from 'clsx';
 import { ArrowRight, CircleCheck, Copy, Check } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
+import { toast } from 'sonner';
 import { Modal, ModalBody, ModalFooter, ModalHeader } from '@/components/Modal';
-import { api, ApiError } from '@/lib/api';
-
-type Project = {
-  id: string;
-  name: string;
-  apiKey: string;
-  createdAt: string;
-};
-
-type State =
-  | { kind: 'form'; error: string | null; submitting: boolean }
-  | { kind: 'reveal'; project: Project };
+import { ApiError } from '@/lib/api';
+import { useCopy } from '@/lib/use-copy';
+import { useCreateProject, type Project } from '@/queries/projects';
+import { useUiStore } from '@/stores/ui-store';
 
 export function NewProjectFlow({ onClose }: { onClose: () => void }) {
-  const [state, setState] = useState<State>({
-    kind: 'form',
-    error: null,
-    submitting: false,
-  });
+  const [project, setProject] = useState<Project | null>(null);
   const [name, setName] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
+  const createProject = useCreateProject();
+  const setLastCreated = useUiStore((s) => s.setLastCreatedProjectId);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (state.kind !== 'form') return;
     const trimmed = name.trim();
-    if (!trimmed || state.submitting) return;
-    setState({ kind: 'form', error: null, submitting: true });
+    if (!trimmed || createProject.isPending) return;
     try {
-      const res = await api.post<{ project: Project }>('/projects', {
-        name: trimmed,
-      });
-      setState({ kind: 'reveal', project: res.project });
-    } catch (err) {
-      const message =
-        err instanceof ApiError
-          ? `${err.status} ${err.message}`
-          : 'Could not reach the API.';
-      setState({ kind: 'form', error: message, submitting: false });
+      const res = await createProject.mutateAsync({ name: trimmed });
+      setLastCreated(res.project.id);
+      setProject(res.project);
+      toast.success(`Created ${res.project.name}`);
+    } catch {
+      // surfaced via createProject.error below
     }
   };
+
+  const errorMessage =
+    createProject.error instanceof ApiError
+      ? createProject.error.message
+      : createProject.error
+        ? 'Could not reach the API.'
+        : null;
 
   return (
     <Modal
       open
       onClose={onClose}
       dismissable
-      label={state.kind === 'form' ? 'Create a project' : 'Project created'}
-      maxWidth={state.kind === 'form' ? '480px' : '520px'}
+      label={project ? 'Project created' : 'Create a project'}
+      maxWidth={project ? '560px' : '520px'}
+      initialFocus={project ? undefined : inputRef}
     >
-      {state.kind === 'form' ? (
+      {project ? (
+        <RevealStep project={project} />
+      ) : (
         <FormStep
           name={name}
           onName={setName}
           onSubmit={onSubmit}
           onCancel={onClose}
-          error={state.error}
-          submitting={state.submitting}
+          error={errorMessage}
+          submitting={createProject.isPending}
           inputRef={inputRef}
         />
-      ) : (
-        <RevealStep project={state.project} />
       )}
     </Modal>
   );
@@ -97,28 +87,16 @@ function FormStep({
   return (
     <form onSubmit={onSubmit} className="flex flex-col">
       <ModalHeader onClose={onCancel}>
-        <span
-          className="uppercase tracking-widest font-bold"
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: '11px',
-            color: 'var(--color-fg-0)',
-          }}
-        >
-          NEW PROJECT
+        <span className="font-display font-bold text-[20px] leading-none tracking-[-0.015em] text-fg-0">
+          New project
         </span>
       </ModalHeader>
 
       <ModalBody>
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-3">
           <label
             htmlFor="project-name"
-            className="uppercase tracking-widest"
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: '10px',
-              color: 'var(--color-fg-2)',
-            }}
+            className="font-body font-medium text-base text-fg-0"
           >
             Project name
           </label>
@@ -133,49 +111,20 @@ function FormStep({
             autoComplete="off"
             spellCheck={false}
             disabled={submitting}
-            className="w-full px-3 h-11 outline-none transition-colors duration-100 focus:border-[var(--color-accent)]"
-            style={{
-              background: 'var(--color-bg-0)',
-              border: '1px solid var(--color-bg-3)',
-              fontFamily: 'var(--font-mono)',
-              fontSize: '14px',
-              color: 'var(--color-fg-0)',
-            }}
+            className="w-full px-4 h-12 outline-none bg-bg-0 border border-bg-3 focus:border-accent font-mono text-[15px] text-fg-0 transition-colors duration-100"
           />
+          <p className="font-body text-base text-fg-1 leading-[1.55]">
+            Shown on your dashboard and next to every captured error.
+          </p>
         </div>
 
         {error && (
-          <div
+          <p
             role="alert"
-            className="flex items-start gap-3 px-3 py-2"
-            style={{
-              background: 'rgba(239, 68, 68, 0.06)',
-              borderLeft: '2px solid var(--color-error)',
-            }}
+            className="font-body text-base text-error leading-[1.5]"
           >
-            <span
-              className="uppercase tracking-widest shrink-0"
-              style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: '10px',
-                color: 'var(--color-error)',
-                lineHeight: '18px',
-                fontWeight: 700,
-              }}
-            >
-              Error
-            </span>
-            <span
-              style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: '11px',
-                color: 'var(--color-fg-0)',
-                lineHeight: '18px',
-              }}
-            >
-              {error}
-            </span>
-          </div>
+            {error}
+          </p>
         )}
       </ModalBody>
 
@@ -183,29 +132,15 @@ function FormStep({
         <button
           type="button"
           onClick={onCancel}
-          className="flex-1 h-12 uppercase tracking-wider transition-colors duration-100 hover:bg-[var(--color-bg-2)]"
-          style={{
-            background: 'var(--color-bg-0)',
-            color: 'var(--color-fg-1)',
-            fontFamily: 'var(--font-display)',
-            fontSize: '12px',
-            fontWeight: 700,
-            borderRight: '1px solid var(--color-bg-3)',
-          }}
+          disabled={submitting}
+          className="flex-1 h-14 bg-bg-2 text-fg-0 font-display font-bold text-[13px] uppercase tracking-wider border-r border-bg-3 hover:bg-bg-3 transition-colors duration-100 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           Cancel
         </button>
         <button
           type="submit"
           disabled={!canSubmit}
-          className="flex-1 h-12 uppercase tracking-wider transition-opacity duration-100 hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
-          style={{
-            background: 'var(--color-accent)',
-            color: 'var(--color-accent-fg)',
-            fontFamily: 'var(--font-display)',
-            fontSize: '12px',
-            fontWeight: 700,
-          }}
+          className="flex-1 h-14 bg-accent text-accent-fg font-display font-bold text-[13px] uppercase tracking-wider hover:opacity-90 transition-opacity duration-100 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {submitting ? 'Creating…' : 'Create project'}
         </button>
@@ -215,25 +150,11 @@ function FormStep({
 }
 
 function RevealStep({ project }: { project: Project }) {
-  const [copiedKey, setCopiedKey] = useState(false);
-  const [copiedSnippet, setCopiedSnippet] = useState(false);
+  const { copied: copiedKey, copy } = useCopy(2000);
   const keyRef = useRef<HTMLElement>(null);
 
-  const snippet = `import { Crashpad } from '@crashpad/sdk';\n\nCrashpad.init({\n  apiKey: '${project.apiKey}',\n  environment: 'production',\n});`;
-
-  const copy = async (text: string, which: 'key' | 'snippet') => {
-    try {
-      await navigator.clipboard.writeText(text);
-      if (which === 'key') {
-        setCopiedKey(true);
-        setTimeout(() => setCopiedKey(false), 2000);
-      } else {
-        setCopiedSnippet(true);
-        setTimeout(() => setCopiedSnippet(false), 2000);
-      }
-    } catch {
-      alert('Clipboard access denied.');
-    }
+  const copyKey = () => {
+    void copy(project.apiKey, 'API key copied');
   };
 
   const selectKey = () => {
@@ -249,152 +170,80 @@ function RevealStep({ project }: { project: Project }) {
   return (
     <div className="flex flex-col">
       <ModalHeader>
-        <CircleCheck
-          size={16}
-          strokeWidth={2}
-          style={{ color: 'var(--color-accent)' }}
-        />
-        <span
-          className="uppercase tracking-widest font-bold"
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: '11px',
-            color: 'var(--color-accent)',
-          }}
-        >
-          PROJECT CREATED
+        <CircleCheck size={18} strokeWidth={2} className="text-accent" />
+        <span className="font-display font-bold text-[20px] leading-none tracking-[-0.015em] text-accent">
+          Project created
         </span>
       </ModalHeader>
 
       <ModalBody>
-        <div className="flex flex-col gap-1.5">
-          <h2
-            className="font-bold"
-            style={{
-              fontFamily: 'var(--font-display)',
-              fontSize: '22px',
-              color: 'var(--color-fg-0)',
-              lineHeight: 1.15,
-              letterSpacing: '-0.015em',
-            }}
-          >
+        <div className="flex flex-col gap-3">
+          <h2 className="font-display font-bold text-[28px] leading-[1.1] tracking-[-0.02em] text-fg-0">
             {project.name}
           </h2>
-          <p
-            style={{
-              fontFamily: 'var(--font-body)',
-              fontSize: '13px',
-              color: 'var(--color-fg-1)',
-              lineHeight: 1.55,
-            }}
-          >
+          <p className="font-body text-[15px] leading-[1.65] text-fg-1">
             Your SDK uses this API key to identify this project. You can copy
             it again from the project list.
           </p>
         </div>
 
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
-            <span
-              className="uppercase tracking-widest"
-              style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: '10px',
-                color: 'var(--color-fg-2)',
-              }}
-            >
-              API Key
+            <span className="font-body font-medium text-base text-fg-0">
+              API key
             </span>
-            <CopyLink
-              copied={copiedKey}
-              onCopy={() => copy(project.apiKey, 'key')}
-              label="API key"
-            />
+            <CopyLink copied={copiedKey} onCopy={copyKey} label="API key" />
           </div>
           <div
             onClick={selectKey}
-            className="pl-4 pr-3 py-3 cursor-text transition-colors duration-100"
-            style={{
-              background: 'var(--color-bg-0)',
-              border: `1px solid ${copiedKey ? 'var(--color-accent)' : 'var(--color-bg-3)'}`,
-            }}
+            className={clsx(
+              'px-4 py-4 cursor-text bg-bg-0 border transition-colors duration-100',
+              copiedKey ? 'border-accent' : 'border-bg-3',
+            )}
           >
             <code
               ref={keyRef}
-              className="break-all select-all block"
-              style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: '12px',
-                color: 'var(--color-fg-0)',
-                lineHeight: 1.55,
-                letterSpacing: '0.01em',
-              }}
+              className="block break-all select-all font-mono text-[13px] leading-[1.55] tracking-[0.01em] text-fg-0"
             >
               {project.apiKey}
             </code>
           </div>
         </div>
 
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between">
-            <span
-              className="uppercase tracking-widest"
-              style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: '10px',
-                color: 'var(--color-fg-2)',
-              }}
-            >
-              SDK Init
-            </span>
-            <CopyLink
-              copied={copiedSnippet}
-              onCopy={() => copy(snippet, 'snippet')}
-              label="init snippet"
-            />
-          </div>
-          <pre
-            className="px-4 py-3 overflow-x-auto"
-            style={{
-              background: 'var(--color-bg-0)',
-              border: `1px solid ${copiedSnippet ? 'var(--color-accent)' : 'var(--color-bg-3)'}`,
-              fontFamily: 'var(--font-mono)',
-              fontSize: '11px',
-              lineHeight: 1.7,
-              margin: 0,
-            }}
-          >
+        <div className="flex flex-col gap-3">
+          <span className="font-body font-medium text-base text-fg-0">
+            SDK init
+          </span>
+          <pre className="m-0 px-4 py-4 overflow-x-auto bg-bg-0 border border-bg-3 font-mono text-sm leading-[1.75]">
             <code>
-              <span style={{ color: 'var(--color-fg-1)' }}>import</span>{' '}
-              <span style={{ color: 'var(--color-fg-0)' }}>
-                {'{ Crashpad }'}
-              </span>{' '}
-              <span style={{ color: 'var(--color-fg-1)' }}>from</span>{' '}
-              <span style={{ color: 'var(--color-status-resolved)' }}>
+              <span className="text-fg-1">import</span>{' '}
+              <span className="text-fg-0">{'{ Crashpad }'}</span>{' '}
+              <span className="text-fg-1">from</span>{' '}
+              <span className="text-status-resolved">
                 &apos;@crashpad/sdk&apos;
               </span>
-              <span style={{ color: 'var(--color-fg-1)' }}>;</span>
+              <span className="text-fg-1">;</span>
               {'\n\n'}
-              <span style={{ color: 'var(--color-fg-0)' }}>Crashpad</span>
-              <span style={{ color: 'var(--color-fg-1)' }}>.</span>
-              <span style={{ color: 'var(--color-accent)' }}>init</span>
-              <span style={{ color: 'var(--color-fg-1)' }}>({'{'}</span>
+              <span className="text-fg-0">Crashpad</span>
+              <span className="text-fg-1">.</span>
+              <span className="text-accent">init</span>
+              <span className="text-fg-1">({'{'}</span>
               {'\n  '}
-              <span style={{ color: 'var(--color-fg-0)' }}>apiKey</span>
-              <span style={{ color: 'var(--color-fg-1)' }}>:</span>{' '}
-              <span style={{ color: 'var(--color-status-resolved)' }}>
+              <span className="text-fg-0">apiKey</span>
+              <span className="text-fg-1">:</span>{' '}
+              <span className="text-status-resolved">
                 &apos;{project.apiKey}&apos;
               </span>
-              <span style={{ color: 'var(--color-fg-1)' }}>,</span>
+              <span className="text-fg-1">,</span>
               {'\n  '}
-              <span style={{ color: 'var(--color-fg-0)' }}>environment</span>
-              <span style={{ color: 'var(--color-fg-1)' }}>:</span>{' '}
-              <span style={{ color: 'var(--color-status-resolved)' }}>
+              <span className="text-fg-0">environment</span>
+              <span className="text-fg-1">:</span>{' '}
+              <span className="text-status-resolved">
                 &apos;production&apos;
               </span>
-              <span style={{ color: 'var(--color-fg-1)' }}>,</span>
+              <span className="text-fg-1">,</span>
               {'\n'}
-              <span style={{ color: 'var(--color-fg-1)' }}>{'});'}</span>
+              <span className="text-fg-1">{'});'}</span>
             </code>
           </pre>
         </div>
@@ -403,17 +252,10 @@ function RevealStep({ project }: { project: Project }) {
       <ModalFooter>
         <Link
           href={`/projects/${project.id}`}
-          className="flex-1 h-12 inline-flex items-center justify-center gap-2 uppercase tracking-wider transition-opacity duration-100 hover:opacity-90"
-          style={{
-            background: 'var(--color-accent)',
-            color: 'var(--color-accent-fg)',
-            fontFamily: 'var(--font-display)',
-            fontSize: '12px',
-            fontWeight: 700,
-          }}
+          className="flex-1 h-14 inline-flex items-center justify-center gap-2 bg-accent text-accent-fg font-display font-bold text-[13px] uppercase tracking-wider hover:opacity-90 transition-opacity duration-100"
         >
           Continue to {project.name}
-          <ArrowRight size={14} strokeWidth={2.25} />
+          <ArrowRight size={15} strokeWidth={2.25} />
         </Link>
       </ModalFooter>
     </div>
@@ -433,19 +275,16 @@ function CopyLink({
     <button
       type="button"
       onClick={onCopy}
-      className="inline-flex items-center gap-1.5 uppercase tracking-widest transition-opacity duration-100 hover:opacity-80"
-      style={{
-        fontFamily: 'var(--font-mono)',
-        fontSize: '10px',
-        fontWeight: 700,
-        color: 'var(--color-accent)',
-      }}
+      className={clsx(
+        'inline-flex items-center gap-1.5 font-body font-medium text-sm transition-colors duration-100 hover:text-fg-0',
+        copied ? 'text-accent' : 'text-fg-1',
+      )}
       aria-label={copied ? `${label} copied` : `Copy ${label}`}
     >
       {copied ? (
-        <Check size={12} strokeWidth={2.5} />
+        <Check size={13} strokeWidth={2} />
       ) : (
-        <Copy size={12} strokeWidth={2} />
+        <Copy size={13} strokeWidth={1.75} />
       )}
       <span>{copied ? 'Copied' : 'Copy'}</span>
     </button>

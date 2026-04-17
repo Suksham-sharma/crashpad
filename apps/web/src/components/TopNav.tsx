@@ -1,8 +1,8 @@
 'use client';
 
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
 import { signOut, useSession } from '@/lib/auth-client';
 
 type Crumb = { label: string; href?: string };
@@ -10,10 +10,8 @@ type Crumb = { label: string; href?: string };
 export function TopNav({ crumbs = [] }: { crumbs?: Crumb[] }) {
   const router = useRouter();
   const { data: session } = useSession();
-  const [menuOpen, setMenuOpen] = useState(false);
 
   const handleSignOut = async () => {
-    setMenuOpen(false);
     await signOut();
     router.replace('/');
   };
@@ -22,55 +20,31 @@ export function TopNav({ crumbs = [] }: { crumbs?: Crumb[] }) {
   const initials = name.slice(0, 1).toUpperCase();
 
   return (
-    <nav
-      className="h-15 sticky top-0 z-50"
-      style={{ background: 'var(--color-bg-1)', height: '60px' }}
-    >
+    <nav className="sticky top-0 z-50 h-[60px] bg-bg-1">
       <div className="h-full w-full px-8 flex items-center justify-between">
         <div className="flex items-center gap-5">
           <Link
             href="/dashboard"
-            className="font-bold tracking-tight uppercase transition-opacity hover:opacity-80"
-            style={{
-              fontFamily: 'var(--font-display)',
-              fontSize: '20px',
-              color: 'var(--color-accent)',
-              letterSpacing: '0.04em',
-            }}
+            className="font-display font-bold text-lg uppercase tracking-[0.04em] text-accent hover:opacity-80 transition-opacity"
           >
             CRASHPAD
           </Link>
           {crumbs.length > 0 && (
             <>
-              <span
-                className="h-4 w-px"
-                style={{ background: 'var(--color-bg-4)' }}
-                aria-hidden
-              />
-              <div
-                className="flex items-center gap-2 uppercase tracking-widest"
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '12px',
-                  color: 'var(--color-fg-1)',
-                }}
-              >
+              <span className="h-4 w-px bg-bg-4" aria-hidden />
+              <div className="flex items-center gap-2 font-mono text-sm uppercase tracking-widest text-fg-1">
                 {crumbs.map((c, i) => (
                   <div key={i} className="flex items-center gap-2">
-                    {i > 0 && (
-                      <span style={{ color: 'var(--color-fg-2)' }}>/</span>
-                    )}
+                    {i > 0 && <span className="text-fg-2">/</span>}
                     {c.href ? (
                       <Link
                         href={c.href}
-                        className="transition-colors duration-100 hover:text-[var(--color-fg-0)]"
+                        className="hover:text-fg-0 transition-colors duration-100"
                       >
                         {c.label}
                       </Link>
                     ) : (
-                      <span style={{ color: 'var(--color-fg-0)' }}>
-                        {c.label}
-                      </span>
+                      <span className="text-fg-0">{c.label}</span>
                     )}
                   </div>
                 ))}
@@ -79,84 +53,46 @@ export function TopNav({ crumbs = [] }: { crumbs?: Crumb[] }) {
           )}
         </div>
 
-        <div className="relative flex items-center gap-3">
-          <span
-            className="hidden sm:inline truncate max-w-[220px]"
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: '13px',
-              color: 'var(--color-fg-1)',
-            }}
-          >
+        <div className="flex items-center gap-3">
+          <span className="hidden sm:inline truncate max-w-[220px] font-mono text-[13px] text-fg-1">
             {session?.user.email}
           </span>
-          <button
-            type="button"
-            onClick={() => setMenuOpen((o) => !o)}
-            className="flex items-center justify-center uppercase font-bold transition-colors duration-100"
-            style={{
-              width: '36px',
-              height: '36px',
-              background: 'var(--color-bg-3)',
-              color: 'var(--color-fg-0)',
-              fontFamily: 'var(--font-display)',
-              fontSize: '14px',
-            }}
-            aria-label="Account menu"
-          >
-            {initials}
-          </button>
 
-          {menuOpen && (
-            <>
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger asChild>
               <button
                 type="button"
-                aria-hidden
-                tabIndex={-1}
-                className="fixed inset-0 z-40 cursor-default"
-                onClick={() => setMenuOpen(false)}
-              />
-              <div
-                className="absolute right-0 top-11 min-w-56 z-50 p-1"
-                style={{ background: 'var(--color-bg-3)' }}
+                aria-label="Account menu"
+                className="w-9 h-9 flex items-center justify-center bg-bg-3 text-fg-0 font-display font-bold text-base uppercase transition-colors duration-100 data-[state=open]:bg-bg-4 focus:outline-none focus-visible:outline focus-visible:outline-1 focus-visible:outline-accent"
               >
-                <div
-                  className="px-3 py-2"
-                  style={{
-                    fontFamily: 'var(--font-body)',
-                    fontSize: '12px',
-                    color: 'var(--color-fg-1)',
-                  }}
-                >
-                  <div
-                    className="truncate"
-                    style={{ color: 'var(--color-fg-0)', fontWeight: 500 }}
-                  >
+                {initials}
+              </button>
+            </DropdownMenu.Trigger>
+
+            <DropdownMenu.Portal>
+              <DropdownMenu.Content
+                align="end"
+                sideOffset={4}
+                className="min-w-[224px] z-50 p-1 bg-bg-3 shadow-2xl focus:outline-none"
+              >
+                <DropdownMenu.Label className="px-3 py-2 font-body text-sm text-fg-1">
+                  <div className="truncate font-medium text-fg-0">
                     {session?.user.name ?? 'Account'}
                   </div>
-                  <div className="truncate" style={{ fontSize: '11px' }}>
+                  <div className="truncate text-xs">
                     {session?.user.email}
                   </div>
-                </div>
-                <div
-                  className="h-px mx-2 my-1"
-                  style={{ background: 'var(--color-bg-4)' }}
-                />
-                <button
-                  type="button"
-                  onClick={handleSignOut}
-                  className="w-full text-left px-3 py-2 uppercase tracking-wider transition-colors duration-100 hover:bg-[var(--color-bg-4)]"
-                  style={{
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: '11px',
-                    color: 'var(--color-fg-0)',
-                  }}
+                </DropdownMenu.Label>
+                <DropdownMenu.Separator className="h-px mx-2 my-1 bg-bg-4" />
+                <DropdownMenu.Item
+                  onSelect={handleSignOut}
+                  className="w-full text-left px-3 py-2 font-mono text-xs uppercase tracking-wider text-fg-0 cursor-pointer outline-none data-[highlighted]:bg-bg-4 transition-colors duration-100"
                 >
                   Sign out
-                </button>
-              </div>
-            </>
-          )}
+                </DropdownMenu.Item>
+              </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Root>
         </div>
       </div>
     </nav>

@@ -20,14 +20,7 @@ export default function DashboardLayout({
   if (isPending || !session) {
     return (
       <main className="min-h-screen flex items-center justify-center">
-        <span
-          className="uppercase tracking-widest"
-          style={{
-            fontFamily: 'var(--font-mono)',
-            color: 'var(--color-fg-2)',
-            fontSize: '10px',
-          }}
-        >
+        <span className="font-mono text-xxs uppercase tracking-widest text-fg-2">
           {isPending ? 'Loading session...' : 'Redirecting...'}
         </span>
       </main>

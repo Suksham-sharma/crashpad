@@ -1,7 +1,9 @@
 'use client';
 
+import * as Dialog from '@radix-ui/react-dialog';
+import * as VisuallyHidden from '@radix-ui/react-visually-hidden';
+import clsx from 'clsx';
 import { X } from 'lucide-react';
-import { useEffect, useRef } from 'react';
 
 type ModalProps = {
   open: boolean;
@@ -10,6 +12,7 @@ type ModalProps = {
   label: string;
   dismissable?: boolean;
   maxWidth?: string;
+  initialFocus?: React.RefObject<HTMLElement | null>;
 };
 
 export function Modal({
@@ -19,70 +22,41 @@ export function Modal({
   label,
   dismissable = true,
   maxWidth = '480px',
+  initialFocus,
 }: ModalProps) {
-  const cardRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [open]);
-
-  useEffect(() => {
-    if (!open || !dismissable || !onClose) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, dismissable, onClose]);
-
-  useEffect(() => {
-    if (!open) return;
-    const focusable = cardRef.current?.querySelector<HTMLElement>(
-      'input, button, [tabindex]:not([tabindex="-1"])',
-    );
-    focusable?.focus();
-  }, [open]);
-
-  if (!open) return null;
-
-  const onBackdrop = (e: React.MouseEvent) => {
-    if (!dismissable || !onClose) return;
-    if (e.target === e.currentTarget) onClose();
+  const handleOpenChange = (next: boolean) => {
+    if (next) return;
+    if (dismissable && onClose) onClose();
   };
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={label}
-      onClick={onBackdrop}
-      className="fixed inset-0 z-50 flex items-center justify-center px-4 py-8"
-      style={{
-        background: 'rgba(0, 0, 0, 0.78)',
-        backdropFilter: 'blur(6px)',
-        WebkitBackdropFilter: 'blur(6px)',
-      }}
-    >
-      <div
-        ref={cardRef}
-        className="w-full flex flex-col"
-        style={{
-          maxWidth,
-          maxHeight: 'calc(100vh - 64px)',
-          background: 'var(--color-bg-1)',
-          border: '1px solid var(--color-bg-3)',
-          boxShadow: '0 20px 80px rgba(0, 0, 0, 0.6)',
-          overflow: 'hidden',
-        }}
-      >
-        {children}
-      </div>
-    </div>
+    <Dialog.Root open={open} onOpenChange={handleOpenChange}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-40 bg-black/75 backdrop-blur-sm" />
+        <Dialog.Content
+          aria-describedby={undefined}
+          onOpenAutoFocus={(e) => {
+            if (initialFocus?.current) {
+              e.preventDefault();
+              initialFocus.current.focus();
+            }
+          }}
+          onInteractOutside={
+            dismissable ? undefined : (e) => e.preventDefault()
+          }
+          onEscapeKeyDown={
+            dismissable ? undefined : (e) => e.preventDefault()
+          }
+          className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[calc(100%-32px)] flex flex-col bg-bg-1 border border-bg-3 shadow-2xl overflow-hidden outline-none focus:outline-none focus-visible:outline-none"
+          style={{ maxWidth, maxHeight: 'calc(100vh - 64px)' }}
+        >
+          <VisuallyHidden.Root>
+            <Dialog.Title>{label}</Dialog.Title>
+          </VisuallyHidden.Root>
+          {children}
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 
@@ -94,24 +68,18 @@ export function ModalHeader({
   onClose?: () => void;
 }) {
   return (
-    <div
-      className="flex items-center justify-between px-5 h-12 shrink-0"
-      style={{
-        background: 'var(--color-bg-0)',
-        borderBottom: '1px solid var(--color-bg-3)',
-      }}
-    >
-      <div className="flex items-center gap-2 min-w-0">{children}</div>
+    <div className="flex items-center justify-between px-7 h-16 shrink-0 bg-bg-0 border-b border-bg-3">
+      <div className="flex items-center gap-3 min-w-0">{children}</div>
       {onClose && (
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close"
-          className="shrink-0 w-7 h-7 flex items-center justify-center transition-colors duration-100 hover:text-[var(--color-fg-0)]"
-          style={{ color: 'var(--color-fg-2)' }}
-        >
-          <X size={16} strokeWidth={1.75} />
-        </button>
+        <Dialog.Close asChild>
+          <button
+            type="button"
+            aria-label="Close"
+            className="shrink-0 w-8 h-8 flex items-center justify-center text-fg-2 hover:text-fg-0 transition-colors duration-100"
+          >
+            <X size={18} strokeWidth={1.75} />
+          </button>
+        </Dialog.Close>
       )}
     </div>
   );
@@ -119,13 +87,18 @@ export function ModalHeader({
 
 export function ModalBody({
   children,
-  className = '',
+  className,
 }: {
   children: React.ReactNode;
   className?: string;
 }) {
   return (
-    <div className={`px-6 py-6 flex flex-col gap-5 overflow-auto ${className}`}>
+    <div
+      className={clsx(
+        'px-7 py-8 flex flex-col gap-7 overflow-auto',
+        className,
+      )}
+    >
       {children}
     </div>
   );
@@ -133,10 +106,7 @@ export function ModalBody({
 
 export function ModalFooter({ children }: { children: React.ReactNode }) {
   return (
-    <div
-      className="flex items-stretch shrink-0"
-      style={{ borderTop: '1px solid var(--color-bg-3)' }}
-    >
+    <div className="flex items-stretch shrink-0 border-t border-bg-3">
       {children}
     </div>
   );
