@@ -26,6 +26,15 @@ export function useProjects() {
   });
 }
 
+export function useProject(id: string) {
+  return useQuery({
+    queryKey: projectKeys.detail(id),
+    queryFn: () => api.get<{ project: Project }>(`/projects/${id}`),
+    select: (data) => data.project,
+    enabled: Boolean(id),
+  });
+}
+
 export function useCreateProject() {
   const qc = useQueryClient();
   return useMutation({

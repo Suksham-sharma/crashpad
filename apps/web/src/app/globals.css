@@ -102,6 +102,16 @@ body {
   outline: none;
 }
 
+/* Shimmer bar — used by the "Listening for events..." polling indicator. */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(400%);
+  }
+}
+
 /* Respect reduced motion — disable the decorative animations, keep hover transitions */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
