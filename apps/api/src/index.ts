@@ -1,8 +1,8 @@
 import { Elysia } from 'elysia';
-import { cors } from '@elysiajs/cors';
 import { env } from './env';
 import { sql, closeDb } from './db';
 import { auth } from './auth';
+import { corsMiddleware } from './middleware/cors';
 import { projectRoutes } from './routes/projects';
 import { meRoute } from './routes/me';
 import { eventRoutes } from './routes/events';
@@ -22,12 +22,7 @@ async function dbHealthy(): Promise<boolean> {
 const app = new Elysia({
   serve: { maxRequestBodySize: 25 * 1024 * 1024 },
 })
-  .use(
-    cors({
-      origin: env.WEB_URL,
-      credentials: true,
-    }),
-  )
+  .use(corsMiddleware)
   .mount(auth.handler)
   .get('/health', async ({ set }) => {
     const db = await dbHealthy();

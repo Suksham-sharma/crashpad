@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 
 export type IssueStatus = 'open' | 'resolved' | 'ignored';
@@ -18,6 +18,48 @@ export type Issue = {
   createdAt: string;
 };
 
+export type EventMetadata = {
+  url: string;
+  userAgent: string;
+  viewport?: { width: number; height: number };
+  replayReady: boolean;
+  timelineMarkers?: {
+    errorTimestamp: number;
+    bufferStartTimestamp: number;
+    eventOffsets: number[];
+  };
+};
+
+export type IssueEvent = {
+  id: string;
+  projectId: string;
+  issueId: string;
+  correlationId: string;
+  timestamp: string;
+  errorType: string;
+  errorMessage: string;
+  stackTrace: string | null;
+  release: string | null;
+  environment: string | null;
+  metadata: EventMetadata;
+  createdAt: string;
+};
+
+export type IssueReplay = {
+  id: string;
+  projectId: string;
+  correlationId: string;
+  rrwebData: unknown[];
+  durationMs: number;
+  createdAt: string;
+};
+
+export type IssueDetail = {
+  issue: Issue;
+  latestEvent: IssueEvent | null;
+  replay: IssueReplay | null;
+};
+
 export type IssueListResponse = {
   issues: Issue[];
   total: number;
@@ -31,6 +73,7 @@ export const issueKeys = {
     [...issueKeys.all, 'project', projectId] as const,
   list: (projectId: string, opts: ListIssuesOpts) =>
     [...issueKeys.byProject(projectId), opts] as const,
+  detail: (issueId: string) => [...issueKeys.all, 'detail', issueId] as const,
 };
 
 export type ListIssuesOpts = {
@@ -61,5 +104,27 @@ export function useProjectIssues(
     enabled: Boolean(projectId),
     refetchInterval: polling ? 10_000 : false,
     refetchIntervalInBackground: false,
+  });
+}
+
+export function useIssue(issueId: string) {
+  return useQuery({
+    queryKey: issueKeys.detail(issueId),
+    queryFn: () => api.get<IssueDetail>(`/issues/${issueId}`),
+    enabled: Boolean(issueId),
+  });
+}
+
+export function useUpdateIssueStatus(issueId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (status: IssueStatus) =>
+      api.patch<{ issue: Issue }>(`/issues/${issueId}`, { status }),
+    onSuccess: ({ issue }) => {
+      qc.setQueryData<IssueDetail>(issueKeys.detail(issueId), (prev) =>
+        prev ? { ...prev, issue } : prev,
+      );
+      qc.invalidateQueries({ queryKey: issueKeys.byProject(issue.projectId) });
+    },
   });
 }

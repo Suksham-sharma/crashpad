@@ -44,9 +44,7 @@ export function Modal({
           onInteractOutside={
             dismissable ? undefined : (e) => e.preventDefault()
           }
-          onEscapeKeyDown={
-            dismissable ? undefined : (e) => e.preventDefault()
-          }
+          onEscapeKeyDown={dismissable ? undefined : (e) => e.preventDefault()}
           className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[calc(100%-32px)] flex flex-col bg-bg-1 border border-bg-3 shadow-2xl overflow-hidden outline-none focus:outline-none focus-visible:outline-none"
           style={{ maxWidth, maxHeight: 'calc(100vh - 64px)' }}
         >
@@ -94,10 +92,7 @@ export function ModalBody({
 }) {
   return (
     <div
-      className={clsx(
-        'px-7 py-8 flex flex-col gap-7 overflow-auto',
-        className,
-      )}
+      className={clsx('px-7 py-8 flex flex-col gap-7 overflow-auto', className)}
     >
       {children}
     </div>

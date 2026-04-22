@@ -118,10 +118,7 @@ function EmptyState() {
     <div className="py-12 flex flex-col gap-10">
       <div className="flex flex-col gap-5 max-w-3xl">
         <span className="inline-flex items-center gap-2 self-start font-mono text-xs uppercase tracking-widest text-accent">
-          <span
-            className="w-1.5 h-1.5 bg-accent animate-pulse"
-            aria-hidden
-          />
+          <span className="w-1.5 h-1.5 bg-accent animate-pulse" aria-hidden />
           DEBUG_CONSOLE · idle
         </span>
 
@@ -195,7 +192,9 @@ function IDETab({
     <div
       className={clsx(
         'flex items-center gap-2 px-4 border-r border-bg-3 font-mono text-xs',
-        active ? 'bg-bg-0 text-fg-0 border-t border-t-accent' : 'text-fg-2 pt-px',
+        active
+          ? 'bg-bg-0 text-fg-0 border-t border-t-accent'
+          : 'text-fg-2 pt-px',
       )}
     >
       <span>{label}</span>
@@ -254,8 +253,7 @@ const CODE_LINES: Array<{
     n: 6,
     content: (
       <>
-        &nbsp;&nbsp;<Prop>environment</Prop>:{' '}
-        <Str>&apos;production&apos;</Str>,
+        &nbsp;&nbsp;<Prop>environment</Prop>: <Str>&apos;production&apos;</Str>,
       </>
     ),
   },
@@ -278,9 +276,7 @@ function CodePane() {
           key={line.n}
           className={clsx(
             'flex items-center px-2 border-l-2',
-            line.error
-              ? 'bg-error/10 border-l-error'
-              : 'border-l-transparent',
+            line.error ? 'bg-error/10 border-l-error' : 'border-l-transparent',
           )}
         >
           <span className="w-10 text-right pr-4 select-none shrink-0 text-fg-2">
@@ -301,10 +297,26 @@ function TerminalPane() {
       <div className="pb-3 mb-2 border-b border-bg-2 text-xxs uppercase tracking-widest text-fg-2">
         TERMINAL · [sdk@0.1.0]
       </div>
-      <LogLine stream="sdk" level="info" text="boot · window.onerror listener attached" />
-      <LogLine stream="sdk" level="info" text="rrweb imported · 30s buffer ready" />
-      <LogLine stream="sdk" level="warn" text="apiKey: undefined — ingest disabled" />
-      <LogLine stream="sdk" level="warn" text="no project registered · awaiting config" />
+      <LogLine
+        stream="sdk"
+        level="info"
+        text="boot · window.onerror listener attached"
+      />
+      <LogLine
+        stream="sdk"
+        level="info"
+        text="rrweb imported · 30s buffer ready"
+      />
+      <LogLine
+        stream="sdk"
+        level="warn"
+        text="apiKey: undefined — ingest disabled"
+      />
+      <LogLine
+        stream="sdk"
+        level="warn"
+        text="no project registered · awaiting config"
+      />
       <LogLine stream="api" level="info" text="0 events · 0 replays · idle" />
       <div className="flex items-center gap-1 pt-2">
         <span className="text-accent">›</span>
@@ -376,13 +388,7 @@ function ProjectList({ projects }: { projects: Project[] }) {
   );
 }
 
-function ProjectRow({
-  project,
-  zebra,
-}: {
-  project: Project;
-  zebra: boolean;
-}) {
+function ProjectRow({ project, zebra }: { project: Project; zebra: boolean }) {
   const { copied, copy } = useCopy();
   const lastCreated = useUiStore((s) => s.lastCreatedProjectId);
   const setLastCreated = useUiStore((s) => s.setLastCreatedProjectId);
@@ -411,10 +417,7 @@ function ProjectRow({
         href={`/projects/${project.id}`}
         className="h-14 flex items-center px-5 gap-5 hover:bg-bg-2 transition-colors duration-100"
       >
-        <span
-          className="w-2 h-2 shrink-0 bg-status-open"
-          aria-hidden
-        />
+        <span className="w-2 h-2 shrink-0 bg-status-open" aria-hidden />
 
         <span className="flex-1 min-w-0 truncate font-mono font-bold text-base leading-tight text-fg-0 group-hover:text-accent transition-colors duration-100">
           {project.name}
