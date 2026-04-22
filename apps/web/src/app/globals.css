@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 /* Design tokens. Tailwind v4 exposes these as utility classes (bg-bg-void,
    text-fg-0, etc). */
@@ -38,9 +38,11 @@
      next/font injects the optimized copy as --font-*-loaded in layout.tsx;
      we reference those first so preload + subsetting benefits apply, with
      the plain name as a fallback for first paint / SSR edge cases. */
-  --font-display: var(--font-display-loaded), "Space Grotesk", system-ui, sans-serif;
-  --font-body: var(--font-body-loaded), "Inter", system-ui, sans-serif;
-  --font-mono: var(--font-mono-loaded), "JetBrains Mono", "SF Mono", Menlo, monospace;
+  --font-display:
+    var(--font-display-loaded), 'Space Grotesk', system-ui, sans-serif;
+  --font-body: var(--font-body-loaded), 'Inter', system-ui, sans-serif;
+  --font-mono:
+    var(--font-mono-loaded), 'JetBrains Mono', 'SF Mono', Menlo, monospace;
 
   /* Font sizes */
   --text-xxs: 10px;
@@ -94,7 +96,7 @@ body {
 /* Focus rings — sharp 1px accent inset, keyboard-only.
    Skip elements with tabindex="-1" (programmatically-focused containers like
    Radix Dialog.Content) — they get focused but shouldn't show a visible ring. */
-:focus-visible:not([tabindex="-1"]) {
+:focus-visible:not([tabindex='-1']) {
   outline: 1px solid var(--color-accent);
   outline-offset: 0;
 }
@@ -114,7 +116,9 @@ body {
 
 /* Respect reduced motion — disable the decorative animations, keep hover transitions */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  *,
+  *::before,
+  *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     scroll-behavior: auto !important;

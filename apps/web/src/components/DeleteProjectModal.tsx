@@ -51,11 +51,7 @@ export function DeleteProjectModal({
     >
       <form onSubmit={handleSubmit} className="flex flex-col">
         <ModalHeader onClose={deleting ? undefined : onClose}>
-          <CircleAlert
-            size={18}
-            strokeWidth={2}
-            className="text-error"
-          />
+          <CircleAlert size={18} strokeWidth={2} className="text-error" />
           <span className="font-display font-bold text-[20px] leading-none tracking-[-0.015em] text-fg-0">
             Delete project
           </span>

@@ -182,8 +182,8 @@ function RevealStep({ project }: { project: Project }) {
             {project.name}
           </h2>
           <p className="font-body text-[15px] leading-[1.65] text-fg-1">
-            Your SDK uses this API key to identify this project. You can copy
-            it again from the project list.
+            Your SDK uses this API key to identify this project. You can copy it
+            again from the project list.
           </p>
         </div>
 

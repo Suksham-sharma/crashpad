@@ -56,9 +56,7 @@ export function useDeleteProject() {
     mutationFn: (id: string) => api.delete<{ ok: true }>(`/projects/${id}`),
     onSuccess: (_data, id) => {
       qc.setQueryData<{ projects: Project[] }>(projectKeys.list(), (prev) =>
-        prev
-          ? { projects: prev.projects.filter((p) => p.id !== id) }
-          : prev,
+        prev ? { projects: prev.projects.filter((p) => p.id !== id) } : prev,
       );
       qc.invalidateQueries({ queryKey: projectKeys.detail(id) });
     },
