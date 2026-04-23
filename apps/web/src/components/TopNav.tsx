@@ -79,9 +79,7 @@ export function TopNav({ crumbs = [] }: { crumbs?: Crumb[] }) {
                   <div className="truncate font-medium text-fg-0">
                     {session?.user.name ?? 'Account'}
                   </div>
-                  <div className="truncate text-xs">
-                    {session?.user.email}
-                  </div>
+                  <div className="truncate text-xs">{session?.user.email}</div>
                 </DropdownMenu.Label>
                 <DropdownMenu.Separator className="h-px mx-2 my-1 bg-bg-4" />
                 <DropdownMenu.Item

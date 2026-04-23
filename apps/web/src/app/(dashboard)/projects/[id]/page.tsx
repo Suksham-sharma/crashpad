@@ -262,13 +262,16 @@ function InstallTabs() {
   const [pm, setPm] = useState<PackageManager>('npm');
   const cmd = installCommand(pm);
   const { copied, copy } = useCopy();
-  const [subcommand, pkg] = cmd.split(' ').slice(1).reduce<[string, string]>(
-    (acc, part, i, arr) => {
-      if (i === arr.length - 1) return [acc[0], part];
-      return [acc[0] ? `${acc[0]} ${part}` : part, acc[1]];
-    },
-    ['', ''],
-  );
+  const [subcommand, pkg] = cmd
+    .split(' ')
+    .slice(1)
+    .reduce<[string, string]>(
+      (acc, part, i, arr) => {
+        if (i === arr.length - 1) return [acc[0], part];
+        return [acc[0] ? `${acc[0]} ${part}` : part, acc[1]];
+      },
+      ['', ''],
+    );
 
   return (
     <div className="bg-bg-2 border border-border-ghost">
@@ -328,7 +331,9 @@ Crashpad.init({
           <span className="text-fg-1">import</span>{' '}
           <span className="text-fg-0">{'{ Crashpad }'}</span>{' '}
           <span className="text-fg-1">from</span>{' '}
-          <span className="text-status-resolved">&apos;@crashpad/sdk&apos;</span>
+          <span className="text-status-resolved">
+            &apos;@crashpad/sdk&apos;
+          </span>
           <span className="text-fg-1">;</span>
           {'\n\n'}
           <span className="text-fg-0">Crashpad</span>
@@ -526,10 +531,7 @@ function PollingIndicator() {
       </div>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span
-            className="w-1.5 h-1.5 bg-accent animate-pulse"
-            aria-hidden
-          />
+          <span className="w-1.5 h-1.5 bg-accent animate-pulse" aria-hidden />
           <span className="font-body text-sm text-fg-1">
             Listening for events...
           </span>
@@ -655,9 +657,7 @@ function FilterBar({
               )}
             >
               {tab.label}
-              {active && (
-                <span className="ml-2 text-fg-2">({total})</span>
-              )}
+              {active && <span className="ml-2 text-fg-2">({total})</span>}
             </button>
           );
         })}

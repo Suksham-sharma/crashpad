@@ -58,6 +58,24 @@ Deferred work. Not in v1 scope. Each entry has enough context that someone (incl
 
 ---
 
+## [v1.5] SDK via CDN / script tag
+
+**What:** Ship a UMD build of `@crashpad/sdk` alongside the ESM build so users can drop `<script src="https://unpkg.com/@crashpad/sdk/dist/crashpad.umd.min.js"></script>` and call `window.Crashpad.init({ apiKey: '...' })` without a bundler.
+
+**Why:** Current SDK only ships as an ESM/TS package, which requires a bundler (Vite, Next.js, etc.). Static sites, WordPress, Shopify, or any "paste this in 5 seconds" install flow can't use it. v1's dogfood target (the builder's own prod app) already has a bundler, so this isn't blocking the v1 success criterion — but it's the obvious next expansion of surface area.
+
+**Pros:** Drop-in install matches Sentry's loader ergonomics. Zero hosting infra — unpkg/jsdelivr auto-serves from npm. `/projects/[id]` waiting-for-event state gains a `script tag` tab next to `npm`, which broadens the onboarding funnel.
+
+**Cons:** Two build targets to keep in sync. rrweb must be **bundled inline** in the UMD build (script-tag users can't resolve the bare `import('rrweb')` specifier in `core/replay.ts`), bloating the bundle to ~200KB gzipped. The dynamic-import-during-requestIdleCallback optimization goes away for CDN users. Version pinning becomes a public concern (stale unpkg cache, etc.).
+
+**Context:** Add a second tsup/rollup entry in `packages/sdk/` with `format: 'iife'` + `globalName: 'Crashpad'` + rrweb inlined (not marked as external). Keep ESM build with rrweb as a peer dep and the current dynamic import so bundler users stay lean. Waiting-for-event state on `/projects/[id]` grows a tabs UI: `npm` | `script tag`, each with its own snippet; the script-tag snippet inlines the API key into `window.Crashpad.init({ apiKey: 'cp_...' })`.
+
+**Depends on / blocked by:** v1 shipping AND a concrete user whose app is script-tag-only. Don't build the second target speculatively.
+
+**Signals to prioritize:** Builder's next dogfood target is a static site / WordPress / Shopify, OR a user asks for a CDN install.
+
+---
+
 ## [v1.5+] Data retention / auto-pruning
 
 **What:** Configurable TTL per project on events and replays, with a background prune job (default: 30 days).
