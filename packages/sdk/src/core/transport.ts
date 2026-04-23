@@ -4,7 +4,15 @@ import { safeAsync } from './safe';
 const EVENT_PATH = '/api/v1/events';
 const REPLAY_PATH = '/api/v1/replays';
 
-async function post(url: string, apiKey: string, payload: unknown): Promise<boolean> {
+async function post(
+  url: string,
+  apiKey: string,
+  payload: unknown,
+  // Fetch keepalive caps request bodies at 64KB; replay payloads routinely
+  // exceed that and get silently stuck pending. Events are small enough to
+  // survive, and benefit from keepalive surviving page-unload.
+  keepalive: boolean,
+): Promise<boolean> {
   const attempt = async (): Promise<Response> =>
     fetch(url, {
       method: 'POST',
@@ -13,7 +21,7 @@ async function post(url: string, apiKey: string, payload: unknown): Promise<bool
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify(payload),
-      keepalive: true,
+      keepalive,
       mode: 'cors',
       credentials: 'omit',
     });
@@ -31,12 +39,12 @@ export async function sendEvent(
   config: ResolvedConfig,
   payload: EventPayload,
 ): Promise<boolean> {
-  return post(`${config.apiUrl}${EVENT_PATH}`, config.apiKey, payload);
+  return post(`${config.apiUrl}${EVENT_PATH}`, config.apiKey, payload, true);
 }
 
 export async function sendReplay(
   config: ResolvedConfig,
   payload: ReplayPayload,
 ): Promise<boolean> {
-  return post(`${config.apiUrl}${REPLAY_PATH}`, config.apiKey, payload);
+  return post(`${config.apiUrl}${REPLAY_PATH}`, config.apiKey, payload, false);
 }
