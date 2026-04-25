@@ -605,19 +605,21 @@ function IssueList({
 }) {
   return (
     <section>
-      <FilterBar status={status} onStatus={onStatus} total={total} />
+      <FilterBar
+        status={status}
+        onStatus={onStatus}
+        total={total}
+        shown={issues.length}
+      />
       {issues.length === 0 ? (
         <EmptyForStatus status={status} />
       ) : (
-        <div className="max-w-7xl mx-auto">
+        <div className="max-w-7xl mx-auto pt-4">
           <ul>
             {issues.map((issue, i) => (
               <IssueRow key={issue.id} issue={issue} zebra={i % 2 === 1} />
             ))}
           </ul>
-          <div className="max-w-7xl mx-auto px-6 h-12 flex items-center font-mono text-xxs uppercase tracking-widest text-fg-2">
-            Showing {issues.length} of {total}
-          </div>
         </div>
       )}
     </section>
@@ -634,33 +636,56 @@ function FilterBar({
   status,
   onStatus,
   total,
+  shown,
 }: {
   status: IssueStatus;
   onStatus: (s: IssueStatus) => void;
   total: number;
+  shown: number;
 }) {
   return (
-    <div className="bg-bg-1 border-b border-border-ghost">
-      <div className="max-w-7xl mx-auto px-6 h-12 flex items-center gap-2">
-        {STATUS_TABS.map((tab) => {
-          const active = tab.value === status;
-          return (
-            <button
-              key={tab.value}
-              type="button"
-              onClick={() => onStatus(tab.value)}
-              className={clsx(
-                'h-8 px-3 font-mono text-xxs uppercase tracking-widest transition-colors duration-100',
-                active
-                  ? 'bg-accent-muted text-accent border border-accent'
-                  : 'text-fg-1 hover:text-fg-0 border border-transparent',
-              )}
-            >
-              {tab.label}
-              {active && <span className="ml-2 text-fg-2">({total})</span>}
-            </button>
-          );
-        })}
+    <div className="border-b border-border-ghost">
+      <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between gap-6">
+        <div className="flex items-center gap-2">
+          {STATUS_TABS.map((tab) => {
+            const active = tab.value === status;
+            const dotClass =
+              tab.value === 'open'
+                ? 'bg-status-open'
+                : tab.value === 'resolved'
+                  ? 'bg-status-resolved'
+                  : 'bg-status-ignored';
+            return (
+              <button
+                key={tab.value}
+                type="button"
+                onClick={() => onStatus(tab.value)}
+                className={clsx(
+                  'h-10 inline-flex items-center gap-2.5 px-4 font-mono text-base uppercase tracking-widest transition-colors duration-100',
+                  active
+                    ? 'bg-accent-muted text-fg-0'
+                    : 'text-fg-2 hover:text-fg-1 hover:bg-bg-1',
+                )}
+              >
+                <span
+                  className={clsx(
+                    'w-1.5 h-1.5 shrink-0',
+                    active ? dotClass : 'bg-fg-2',
+                  )}
+                  aria-hidden
+                />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
+        {total > 0 && (
+          <span className="font-mono text-xs uppercase tracking-widest text-fg-2 tabular-nums">
+            {shown === total
+              ? `${total} ${total === 1 ? 'issue' : 'issues'}`
+              : `${shown} of ${total}`}
+          </span>
+        )}
       </div>
     </div>
   );
