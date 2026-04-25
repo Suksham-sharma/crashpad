@@ -4,7 +4,14 @@ import clsx from 'clsx';
 import { Pause, Play } from 'lucide-react';
 import { Replayer } from 'rrweb';
 import type { eventWithTime } from 'rrweb';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 type Props = {
   rrwebData: unknown[];
@@ -23,6 +30,7 @@ export function DockedPlayer({
   errorOffsetMs,
 }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
   const replayerRef = useRef<Replayer | null>(null);
   const rafRef = useRef<number | null>(null);
 
@@ -30,6 +38,43 @@ export function DockedPlayer({
   const [playing, setPlaying] = useState(false);
   const [currentMs, setCurrentMs] = useState(0);
   const [speed, setSpeed] = useState<Speed>(1);
+  const [scale, setScale] = useState(1);
+
+  const recordedDims = useMemo(() => {
+    type MaybeMeta = {
+      type?: number;
+      data?: { width?: unknown; height?: unknown };
+    };
+    for (const e of rrwebData as MaybeMeta[]) {
+      if (
+        e?.type === 4 &&
+        typeof e.data?.width === 'number' &&
+        typeof e.data?.height === 'number' &&
+        e.data.width > 0 &&
+        e.data.height > 0
+      ) {
+        return { w: e.data.width as number, h: e.data.height as number };
+      }
+    }
+    return null;
+  }, [rrwebData]);
+
+  useLayoutEffect(() => {
+    if (!recordedDims) return;
+    const stage = stageRef.current;
+    if (!stage) return;
+    const update = () => {
+      const rect = stage.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
+      const sx = rect.width / recordedDims.w;
+      const sy = rect.height / recordedDims.h;
+      setScale(Math.min(sx, sy, 1));
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(stage);
+    return () => ro.disconnect();
+  }, [recordedDims]);
 
   useEffect(() => {
     if (!hostRef.current) return;
@@ -125,7 +170,7 @@ export function DockedPlayer({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="relative flex-1 min-h-0 bg-bg-0 overflow-auto">
+      <div className="relative flex-1 min-h-0 bg-bg-0 overflow-hidden">
         <div className="absolute left-3 top-3 z-10 inline-flex items-center gap-1.5 h-6 px-2 bg-[rgba(239,68,68,0.12)] text-[color:var(--color-error)] font-mono text-[10px] font-bold uppercase tracking-widest">
           <span
             className="w-1.5 h-1.5 bg-[color:var(--color-error)] animate-pulse"
@@ -134,11 +179,37 @@ export function DockedPlayer({
           LIVE REPLAY
         </div>
         <div
-          ref={hostRef}
-          className="w-full h-full flex items-center justify-center [&_.replayer-wrapper]:!mx-auto [&_iframe]:bg-white"
-        />
+          ref={stageRef}
+          className="absolute inset-0 flex items-center justify-center"
+        >
+          {recordedDims ? (
+            <div
+              className="relative shrink-0"
+              style={{
+                width: recordedDims.w * scale,
+                height: recordedDims.h * scale,
+              }}
+            >
+              <div
+                ref={hostRef}
+                className="absolute top-0 left-0 [&_iframe]:bg-white"
+                style={{
+                  width: recordedDims.w,
+                  height: recordedDims.h,
+                  transformOrigin: 'top left',
+                  transform: `scale(${scale})`,
+                }}
+              />
+            </div>
+          ) : (
+            <div
+              ref={hostRef}
+              className="w-full h-full flex items-center justify-center [&_iframe]:bg-white"
+            />
+          )}
+        </div>
         {!ready && (
-          <div className="absolute inset-0 flex items-center justify-center font-mono text-xs uppercase tracking-widest text-fg-2">
+          <div className="absolute inset-0 flex items-center justify-center font-mono text-xs uppercase tracking-widest text-fg-2 pointer-events-none">
             Loading replay...
           </div>
         )}
