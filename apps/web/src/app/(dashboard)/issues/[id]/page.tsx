@@ -35,14 +35,14 @@ export default function IssueDetailPage() {
   if (!data) return <PageError message="Issue not found." />;
 
   return (
-    <main className="min-h-[calc(100vh-60px)] flex flex-col">
+    <main className="h-[calc(100vh-60px)] flex flex-col overflow-hidden">
       <IssueHeader detail={data} />
       <IssueTitle detail={data} />
-      <div className="grid grid-cols-[1fr_440px] gap-px bg-border-ghost h-[520px]">
-        <div className="bg-bg-0 min-w-0">
+      <div className="grid grid-cols-[1fr_440px] grid-rows-[1fr] gap-px bg-border-ghost flex-1 min-h-0">
+        <div className="bg-bg-0 min-w-0 min-h-0 overflow-hidden">
           <ReplayPane detail={data} />
         </div>
-        <div className="bg-bg-1 min-w-0 overflow-hidden">
+        <div className="bg-bg-1 min-w-0 min-h-0 overflow-hidden">
           <StackTracePanel detail={data} />
         </div>
       </div>
@@ -160,7 +160,7 @@ function IssueTitle({ detail }: { detail: IssueDetail }) {
     [latestEvent?.stackTrace],
   );
   return (
-    <section className="px-6 pt-6 pb-5">
+    <section className="px-6 pt-5 pb-4 shrink-0">
       <h1 className="font-mono text-xl font-bold text-accent leading-tight break-words">
         {issue.title}
       </h1>
@@ -299,8 +299,8 @@ function BottomTabs({
   detail: IssueDetail;
 }) {
   return (
-    <section className="border-t border-border-ghost">
-      <div className="flex h-11 px-6 items-center gap-6 border-b border-border-ghost">
+    <section className="border-t border-border-ghost shrink-0 flex flex-col max-h-[40vh]">
+      <div className="flex h-11 px-6 items-center gap-6 border-b border-border-ghost shrink-0">
         <TabButton id="dom" tab={tab} onTab={onTab} label="DOM" />
         <TabButton id="stack" tab={tab} onTab={onTab} label="STACK" />
         <TabButton
@@ -320,7 +320,7 @@ function BottomTabs({
           disabled
         />
       </div>
-      <div className="px-6 py-6">
+      <div className="px-6 py-5 overflow-y-auto">
         {tab === 'dom' && <MetaGrid detail={detail} />}
         {tab === 'stack' && <StackRawPanel detail={detail} />}
         {(tab === 'network' || tab === 'console') && <ComingSoon />}
