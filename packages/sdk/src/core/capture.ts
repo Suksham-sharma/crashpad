@@ -1,8 +1,14 @@
-import type { EventPayload, ReplayPayload, ResolvedConfig } from './types';
+import type {
+  EventPayload,
+  ReplayPayload,
+  ResolvedConfig,
+  SessionEvent,
+} from './types';
 import { getConfig } from './config';
 import { newCorrelationId } from './session';
 import { sendEvent, sendReplay } from './transport';
 import { snapshotReplay, isReplayRunning } from './replay';
+import { snapshotSessionEvents } from './network';
 import { safe, safeAsync } from './safe';
 
 interface NormalizedError {
@@ -70,6 +76,25 @@ function logDebug(config: ResolvedConfig, ...args: unknown[]): void {
   });
 }
 
+// Replays without at least the rrweb meta event + one frame after it are
+// empty by definition (just the snapshot, no actions). Gating skips them.
+const MIN_REPLAY_EVENTS = 2;
+
+function filterIngestNoise(
+  events: SessionEvent[],
+  apiUrl: string,
+): SessionEvent[] {
+  if (events.length === 0) return events;
+  const base = apiUrl.replace(/\/+$/, '');
+  // Path-precise to avoid falsely filtering user-app calls that happen to
+  // share an origin with the API in dev (e.g. both on localhost:4000).
+  const ingestPaths = [`${base}/api/v1/events`, `${base}/api/v1/replays`];
+  return events.filter((e) => {
+    if (e.type !== 'network') return true;
+    return !ingestPaths.some((p) => e.url.startsWith(p));
+  });
+}
+
 export async function report(input: unknown): Promise<void> {
   const config = getConfig();
   if (!config) return;
@@ -78,8 +103,19 @@ export async function report(input: unknown): Promise<void> {
   const correlationId = newCorrelationId();
   const replayReady = isReplayRunning();
 
-  const eventPayload = buildEventPayload(config, err, correlationId, replayReady);
-  const snapshot = replayReady ? snapshotReplay() : { events: [], durationMs: 0 };
+  const eventPayload = buildEventPayload(
+    config,
+    err,
+    correlationId,
+    replayReady,
+  );
+  const snapshot = replayReady
+    ? snapshotReplay()
+    : { events: [], durationMs: 0 };
+  const sessionEvents = filterIngestNoise(
+    snapshotSessionEvents(),
+    config.apiUrl,
+  );
   const errorTimestamp = Date.now();
 
   logDebug(config, 'capturing', err.errorType, err.errorMessage);
@@ -89,12 +125,13 @@ export async function report(input: unknown): Promise<void> {
     logDebug(config, 'event sent', ok);
   });
 
-  if (replayReady && snapshot.events.length > 0) {
+  if (replayReady && snapshot.events.length >= MIN_REPLAY_EVENTS) {
     const replayPayload: ReplayPayload = {
       correlationId,
       errorTimestamp,
       durationMs: snapshot.durationMs,
       rrwebData: snapshot.events,
+      sessionEvents,
     };
     await safeAsync(async () => {
       const ok = await sendReplay(config, replayPayload);

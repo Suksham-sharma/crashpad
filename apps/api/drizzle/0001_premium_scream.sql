@@ -1,0 +1,1 @@
+ALTER TABLE "replays" ADD COLUMN "session_events" jsonb DEFAULT '[]'::jsonb NOT NULL;

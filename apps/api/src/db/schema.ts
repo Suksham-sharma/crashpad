@@ -162,7 +162,9 @@ export const analyses = pgTable(
     suggestedFix: text('suggested_fix'),
     model: text('model'),
     promptVersion: integer('prompt_version').notNull().default(1),
-    status: text('status', { enum: analysisStatus }).notNull().default('pending'),
+    status: text('status', { enum: analysisStatus })
+      .notNull()
+      .default('pending'),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -216,6 +218,19 @@ export const events = pgTable(
 
 export type RrwebEventStream = unknown[];
 
+export interface NetworkSessionEvent {
+  type: 'network';
+  timestamp: number;
+  method: string;
+  url: string;
+  status: number | null;
+  durationMs: number;
+  initiator: 'fetch' | 'xhr';
+  failed?: boolean;
+}
+
+export type SessionEvent = NetworkSessionEvent;
+
 export const replays = pgTable(
   'replays',
   {
@@ -226,6 +241,10 @@ export const replays = pgTable(
     correlationId: uuid('correlation_id').notNull(),
     rrwebData: jsonb('rrweb_data').$type<RrwebEventStream>().notNull(),
     durationMs: integer('duration_ms').notNull(),
+    sessionEvents: jsonb('session_events')
+      .$type<SessionEvent[]>()
+      .notNull()
+      .default([]),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),

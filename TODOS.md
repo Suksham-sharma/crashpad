@@ -26,7 +26,7 @@ Deferred work. Not in v1 scope. Each entry has enough context that someone (incl
 
 **What:** Replace the 10-second dashboard polling loop with Server-Sent Events (SSE) pushing new issues as they arrive.
 
-**Why:** The issue list polls `GET /api/v1/issues?project_id=...` every 10 seconds. At one user in one tab this is fine. But the first time you watch an error land in real time and there's a 10-second delay between the crash and it appearing in the dashboard, it feels sluggish. Also: 10s polling from N tabs is N*6 req/min to the API for data that hasn't changed 95% of the time.
+**Why:** The issue list polls `GET /api/v1/issues?project_id=...` every 10 seconds. At one user in one tab this is fine. But the first time you watch an error land in real time and there's a 10-second delay between the crash and it appearing in the dashboard, it feels sluggish. Also: 10s polling from N tabs is N\*6 req/min to the API for data that hasn't changed 95% of the time.
 
 **Pros:** Sub-second latency from error → dashboard visibility. Lower API load. Feels live in a way polling never does.
 
@@ -91,3 +91,21 @@ Deferred work. Not in v1 scope. Each entry has enough context that someone (incl
 **Depends on / blocked by:** v1 shipping. Earlier if dogfood traffic grows faster than expected.
 
 **Signals to prioritize:** Postgres disk usage growth, OR the first time someone asks "can I delete old errors?"
+
+---
+
+## [v1.5] `maskUrls` config option for the network panel
+
+**What:** Add a `CrashpadConfig.maskUrls?: 'strip-query' | 'off' | (url: string) => string` option to control how `NetworkSessionEvent.url` is sanitized before it lands on the wire.
+
+**Why:** The network panel (shipped in the network-capture slice) records URLs verbatim, including query strings. URLs with secrets in the query (auth tokens, S3 presigned signatures, OAuth `code`/`state`, password-reset tokens, email addresses) end up in the replay payload. v1 ships with a JSDoc warning on `NetworkSessionEvent.url` documenting the gap and pointing users at this option as the principled fix. Most production apps shouldn't have to read a JSDoc note to be safe — this should become the default.
+
+**Pros:** Closes the URL-PII vector, parallel to how `maskInputs` closes the form-field one. Custom redactor function gives users an escape hatch for app-specific patterns (`/users/:id` → `/users/:redacted`). Safer-by-default if `'strip-query'` becomes the new default.
+
+**Cons:** Stripping the query removes useful debugging signal — `/api/users?id=42` becomes `/api/users` and you can't tell which user the call was for. The dashboard Network panel becomes less informative for apps that legitimately use query strings for non-secret IDs. The custom-function path complicates the SDK's "never throw" guarantee — the user's redactor must be wrapped in `safe()` and fall back to the raw URL on throw.
+
+**Context:** Default is open: `'off'` ships first, JSDoc continues to warn. Once a real user hits the bug or asks for it, ship `'strip-query'` and consider making it default. The redactor function should run inside `safe()` in `core/network.ts:resolveUrl` (or a new `sanitizeUrl` helper). Truncation to `MAX_URL_LENGTH` happens AFTER the redactor.
+
+**Depends on / blocked by:** v1 shipping. The network panel is in v1; the masking option is the v1.5 follow-up.
+
+**Signals to prioritize:** A user reports a leaked token in a replay URL, OR the builder ships Crashpad on an app that uses query-string auth.

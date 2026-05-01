@@ -22,9 +22,16 @@ import type { CrashpadConfig } from './core/types';
 import { setConfig, getConfig, resetConfig } from './core/config';
 import { installCapture, uninstallCapture, report } from './core/capture';
 import { startReplay, stopReplay } from './core/replay';
+import { installNetworkCapture, uninstallNetworkCapture } from './core/network';
 import { safe } from './core/safe';
 
-export type { CrashpadConfig, EventPayload, ReplayPayload } from './core/types';
+export type {
+  CrashpadConfig,
+  EventPayload,
+  ReplayPayload,
+  SessionEvent,
+  NetworkSessionEvent,
+} from './core/types';
 
 let initialized = false;
 
@@ -46,6 +53,7 @@ function init(config: CrashpadConfig): void {
 
     const resolved = setConfig(config);
     installCapture();
+    installNetworkCapture();
     if (resolved.replay) startReplay(resolved.maskInputs);
 
     initialized = true;
@@ -85,6 +93,7 @@ function captureException(error: unknown): void {
 function shutdown(): void {
   safe(() => {
     uninstallCapture();
+    uninstallNetworkCapture();
     stopReplay();
     resetConfig();
     initialized = false;

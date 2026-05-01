@@ -5,6 +5,7 @@ import {
   replays,
   type RrwebEventStream,
   type EventMetadata,
+  type SessionEvent,
 } from '../db/schema';
 
 export interface IngestReplayInput {
@@ -12,6 +13,7 @@ export interface IngestReplayInput {
   errorTimestamp: number;
   durationMs: number;
   rrwebData: RrwebEventStream;
+  sessionEvents?: SessionEvent[];
 }
 
 export interface IngestReplayResult {
@@ -59,6 +61,7 @@ export async function ingestReplay(
         correlationId: input.correlationId,
         rrwebData: input.rrwebData,
         durationMs: input.durationMs,
+        sessionEvents: input.sessionEvents ?? [],
       })
       .returning({ id: replays.id });
 

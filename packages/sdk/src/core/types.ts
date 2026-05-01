@@ -140,6 +140,52 @@ export interface EventPayload {
 }
 
 /**
+ * One entry in the auxiliary session-events stream that travels alongside
+ * the rrweb DOM stream on the {@link ReplayPayload}.
+ *
+ * Discriminated by `type`. New variants land here as the docked player
+ * grows new tabs (network, console, breadcrumbs, ...). Each variant must
+ * carry a wall-clock `timestamp` (ms since epoch) so the dashboard can
+ * align entries against the rrweb timeline using the replay's buffer
+ * start timestamp.
+ */
+export type SessionEvent = NetworkSessionEvent;
+
+/**
+ * A network request captured from `fetch` or `XMLHttpRequest`. v1 deliberately
+ * omits request/response bodies and headers to avoid leaking PII. Body capture
+ * is opt-in territory for a later release.
+ */
+export interface NetworkSessionEvent {
+  type: 'network';
+  /** Wall-clock ms (Date.now()) when the request started. */
+  timestamp: number;
+  /** HTTP method, uppercased. */
+  method: string;
+  /**
+   * Request URL, truncated to 2KB before send.
+   *
+   * **PII WARNING:** the URL is captured verbatim, including query strings.
+   * If your app puts secrets in URLs — auth tokens, presigned-URL signatures,
+   * email addresses, OAuth `code`/`state`, password-reset tokens — they will
+   * land in the replay payload. v1 accepts this tradeoff to keep the panel
+   * useful (endpoints with IDs are how requests are recognized). Keep
+   * sensitive values in headers or POST bodies, not query parameters. A
+   * `maskUrls` config option to strip query strings or run a custom redactor
+   * is on the v1.5 roadmap.
+   */
+  url: string;
+  /** HTTP status code, or `null` if the request failed before a response arrived. */
+  status: number | null;
+  /** ms between request start and response end (or failure). */
+  durationMs: number;
+  /** Which transport captured this request. */
+  initiator: 'fetch' | 'xhr';
+  /** `true` if the request never produced a response (network error, abort, CORS). */
+  failed?: boolean;
+}
+
+/**
  * Payload shape sent to `POST /api/v1/replays`.
  *
  * Joined to the matching {@link EventPayload} by `correlationId`. The
@@ -156,4 +202,10 @@ export interface ReplayPayload {
   durationMs: number;
   /** Opaque rrweb event stream. Shape owned by rrweb, not the Crashpad API. */
   rrwebData: unknown[];
+  /**
+   * Auxiliary session events (network requests, console calls, etc.) captured
+   * during the same buffer window as `rrwebData`. Empty array if nothing was
+   * captured. The dashboard renders these in the docked player's bottom tabs.
+   */
+  sessionEvents: SessionEvent[];
 }
