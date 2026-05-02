@@ -5,8 +5,10 @@ import { Pause, Play } from 'lucide-react';
 import { Replayer } from 'rrweb';
 import type { eventWithTime } from 'rrweb';
 import {
+  forwardRef,
   useCallback,
   useEffect,
+  useImperativeHandle,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -18,250 +20,266 @@ type Props = {
   durationMs: number;
   markerOffsets?: number[];
   errorOffsetMs?: number;
+  onTimeChange?: (ms: number) => void;
+};
+
+export type DockedPlayerHandle = {
+  seek: (ms: number) => void;
 };
 
 const SPEEDS = [1, 2, 4] as const;
 type Speed = (typeof SPEEDS)[number];
 
-export function DockedPlayer({
-  rrwebData,
-  durationMs,
-  markerOffsets = [],
-  errorOffsetMs,
-}: Props) {
-  const hostRef = useRef<HTMLDivElement>(null);
-  const stageRef = useRef<HTMLDivElement>(null);
-  const replayerRef = useRef<Replayer | null>(null);
-  const rafRef = useRef<number | null>(null);
+type MaybeMeta = {
+  type?: number;
+  data?: { width?: unknown; height?: unknown };
+};
 
-  const [ready, setReady] = useState(false);
-  const [playing, setPlaying] = useState(false);
-  const [currentMs, setCurrentMs] = useState(0);
-  const [speed, setSpeed] = useState<Speed>(1);
-  const [scale, setScale] = useState(1);
+function extractRecordedDims(
+  rrwebData: unknown[],
+): { w: number; h: number } | null {
+  for (const e of rrwebData as MaybeMeta[]) {
+    if (
+      e?.type === 4 &&
+      typeof e.data?.width === 'number' &&
+      typeof e.data?.height === 'number' &&
+      e.data.width > 0 &&
+      e.data.height > 0
+    ) {
+      return { w: e.data.width, h: e.data.height };
+    }
+  }
+  return null;
+}
 
-  const recordedDims = useMemo(() => {
-    type MaybeMeta = {
-      type?: number;
-      data?: { width?: unknown; height?: unknown };
-    };
-    for (const e of rrwebData as MaybeMeta[]) {
-      if (
-        e?.type === 4 &&
-        typeof e.data?.width === 'number' &&
-        typeof e.data?.height === 'number' &&
-        e.data.width > 0 &&
-        e.data.height > 0
-      ) {
-        return { w: e.data.width as number, h: e.data.height as number };
+export const DockedPlayer = forwardRef<DockedPlayerHandle, Props>(
+  function DockedPlayer(
+    { rrwebData, durationMs, markerOffsets = [], errorOffsetMs, onTimeChange },
+    ref,
+  ) {
+    const hostRef = useRef<HTMLDivElement>(null);
+    const stageRef = useRef<HTMLDivElement>(null);
+    const replayerRef = useRef<Replayer | null>(null);
+    const rafRef = useRef<number | null>(null);
+
+    const [ready, setReady] = useState(false);
+    const [playing, setPlaying] = useState(false);
+    const [currentMs, setCurrentMs] = useState(0);
+    const [speed, setSpeed] = useState<Speed>(1);
+    const [scale, setScale] = useState(1);
+
+    const recordedDims = useMemo(() => extractRecordedDims(rrwebData), [rrwebData]);
+
+    useLayoutEffect(() => {
+      if (!recordedDims) return;
+      const stage = stageRef.current;
+      if (!stage) return;
+      const update = () => {
+        const rect = stage.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return;
+        const sx = rect.width / recordedDims.w;
+        const sy = rect.height / recordedDims.h;
+        setScale(Math.min(sx, sy, 1));
+      };
+      update();
+      const ro = new ResizeObserver(update);
+      ro.observe(stage);
+      return () => ro.disconnect();
+    }, [recordedDims]);
+
+    useEffect(() => {
+      if (!hostRef.current) return;
+      const host = hostRef.current;
+      host.innerHTML = '';
+
+      let replayer: Replayer | null = null;
+      try {
+        replayer = new Replayer(rrwebData as eventWithTime[], {
+          root: host,
+          skipInactive: true,
+          showWarning: false,
+          mouseTail: false,
+        });
+      } catch (err) {
+        console.error('[DockedPlayer] failed to init', err);
+        return;
       }
-    }
-    return null;
-  }, [rrwebData]);
 
-  useLayoutEffect(() => {
-    if (!recordedDims) return;
-    const stage = stageRef.current;
-    if (!stage) return;
-    const update = () => {
-      const rect = stage.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) return;
-      const sx = rect.width / recordedDims.w;
-      const sy = rect.height / recordedDims.h;
-      setScale(Math.min(sx, sy, 1));
-    };
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(stage);
-    return () => ro.disconnect();
-  }, [recordedDims]);
+      replayerRef.current = replayer;
+      replayer.on('finish', () => setPlaying(false));
+      // Imperative init — Replayer must bind to the mounted host div, so ready
+      // flips once per rrwebData identity, not per render.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setReady(true);
+      setCurrentMs(0);
 
-  useEffect(() => {
-    if (!hostRef.current) return;
-    const host = hostRef.current;
-    host.innerHTML = '';
+      return () => {
+        replayer?.destroy();
+        replayerRef.current = null;
+        setReady(false);
+        setPlaying(false);
+      };
+    }, [rrwebData]);
 
-    let replayer: Replayer | null = null;
-    try {
-      replayer = new Replayer(rrwebData as eventWithTime[], {
-        root: host,
-        skipInactive: true,
-        showWarning: false,
-        mouseTail: false,
-      });
-    } catch (err) {
-      console.error('[DockedPlayer] failed to init', err);
-      return;
-    }
-
-    replayerRef.current = replayer;
-    replayer.on('finish', () => setPlaying(false));
-    // Imperative init — Replayer must bind to the mounted host div, so ready
-    // flips once per rrwebData identity, not per render.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setReady(true);
-    setCurrentMs(0);
-
-    return () => {
-      replayer?.destroy();
-      replayerRef.current = null;
-      setReady(false);
-      setPlaying(false);
-    };
-  }, [rrwebData]);
-
-  useEffect(() => {
-    if (!playing) return;
-    let cancelled = false;
-    const loop = () => {
-      if (cancelled) return;
-      const r = replayerRef.current;
-      if (r)
-        setCurrentMs(Math.max(0, Math.min(r.getCurrentTime(), durationMs)));
+    useEffect(() => {
+      if (!playing) return;
+      let cancelled = false;
+      const loop = () => {
+        if (cancelled) return;
+        const r = replayerRef.current;
+        if (r)
+          setCurrentMs(Math.max(0, Math.min(r.getCurrentTime(), durationMs)));
+        rafRef.current = requestAnimationFrame(loop);
+      };
       rafRef.current = requestAnimationFrame(loop);
-    };
-    rafRef.current = requestAnimationFrame(loop);
-    return () => {
-      cancelled = true;
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    };
-  }, [playing, durationMs]);
+      return () => {
+        cancelled = true;
+        if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      };
+    }, [playing, durationMs]);
 
-  const play = useCallback((fromMs?: number) => {
-    const r = replayerRef.current;
-    if (!r) return;
-    r.play(fromMs);
-    setPlaying(true);
-  }, []);
+    const play = useCallback((fromMs?: number) => {
+      const r = replayerRef.current;
+      if (!r) return;
+      r.play(fromMs);
+      setPlaying(true);
+    }, []);
 
-  const pause = useCallback((atMs?: number) => {
-    const r = replayerRef.current;
-    if (!r) return;
-    r.pause(atMs);
-    if (typeof atMs === 'number') setCurrentMs(atMs);
-    setPlaying(false);
-  }, []);
+    const pause = useCallback((atMs?: number) => {
+      const r = replayerRef.current;
+      if (!r) return;
+      r.pause(atMs);
+      if (typeof atMs === 'number') setCurrentMs(atMs);
+      setPlaying(false);
+    }, []);
 
-  const togglePlay = useCallback(() => {
-    if (playing) pause();
-    else play(currentMs >= durationMs - 50 ? 0 : currentMs);
-  }, [playing, pause, play, currentMs, durationMs]);
+    const togglePlay = useCallback(() => {
+      if (playing) pause();
+      else play(currentMs >= durationMs - 50 ? 0 : currentMs);
+    }, [playing, pause, play, currentMs, durationMs]);
 
-  const seek = useCallback(
-    (ms: number) => {
-      const clamped = Math.max(0, Math.min(ms, durationMs));
-      if (playing) play(clamped);
-      else pause(clamped);
-    },
-    [playing, play, pause, durationMs],
-  );
+    const seek = useCallback(
+      (ms: number) => {
+        const clamped = Math.max(0, Math.min(ms, durationMs));
+        if (playing) play(clamped);
+        else pause(clamped);
+      },
+      [playing, play, pause, durationMs],
+    );
 
-  const handleScrubChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      seek(Number(e.target.value));
-    },
-    [seek],
-  );
+    useImperativeHandle(ref, () => ({ seek }), [seek]);
 
-  const changeSpeed = useCallback((s: Speed) => {
-    setSpeed(s);
-    replayerRef.current?.setConfig({ speed: s });
-  }, []);
+    useEffect(() => {
+      onTimeChange?.(currentMs);
+    }, [currentMs, onTimeChange]);
 
-  return (
-    <div className="flex flex-col h-full">
-      <div className="relative flex-1 min-h-0 bg-bg-0 overflow-hidden">
-        <div className="absolute left-3 top-3 z-10 inline-flex items-center gap-1.5 h-6 px-2 bg-[rgba(239,68,68,0.12)] text-[color:var(--color-error)] font-mono text-[10px] font-bold uppercase tracking-widest">
-          <span
-            className="w-1.5 h-1.5 bg-[color:var(--color-error)] animate-pulse"
-            aria-hidden
-          />
-          LIVE REPLAY
-        </div>
-        <div
-          ref={stageRef}
-          className="absolute inset-0 flex items-center justify-center"
-        >
-          {recordedDims ? (
-            <div
-              className="relative shrink-0"
-              style={{
-                width: recordedDims.w * scale,
-                height: recordedDims.h * scale,
-              }}
-            >
+    const handleScrubChange = useCallback(
+      (e: React.ChangeEvent<HTMLInputElement>) => {
+        seek(Number(e.target.value));
+      },
+      [seek],
+    );
+
+    const changeSpeed = useCallback((s: Speed) => {
+      setSpeed(s);
+      replayerRef.current?.setConfig({ speed: s });
+    }, []);
+
+    return (
+      <div className="flex flex-col h-full">
+        <div className="relative flex-1 min-h-0 bg-bg-0 overflow-hidden">
+          <div className="absolute left-3 top-3 z-10 inline-flex items-center gap-1.5 h-6 px-2 bg-[rgba(239,68,68,0.12)] text-[color:var(--color-error)] font-mono text-[10px] font-bold uppercase tracking-widest">
+            <span
+              className="w-1.5 h-1.5 bg-[color:var(--color-error)] animate-pulse"
+              aria-hidden
+            />
+            LIVE REPLAY
+          </div>
+          <div
+            ref={stageRef}
+            className="absolute inset-0 flex items-center justify-center"
+          >
+            {recordedDims ? (
+              <div
+                className="relative shrink-0"
+                style={{
+                  width: recordedDims.w * scale,
+                  height: recordedDims.h * scale,
+                }}
+              >
+                <div
+                  ref={hostRef}
+                  className="absolute top-0 left-0 [&_iframe]:bg-white"
+                  style={{
+                    width: recordedDims.w,
+                    height: recordedDims.h,
+                    transformOrigin: 'top left',
+                    transform: `scale(${scale})`,
+                  }}
+                />
+              </div>
+            ) : (
               <div
                 ref={hostRef}
-                className="absolute top-0 left-0 [&_iframe]:bg-white"
-                style={{
-                  width: recordedDims.w,
-                  height: recordedDims.h,
-                  transformOrigin: 'top left',
-                  transform: `scale(${scale})`,
-                }}
+                className="w-full h-full flex items-center justify-center [&_iframe]:bg-white"
               />
-            </div>
-          ) : (
-            <div
-              ref={hostRef}
-              className="w-full h-full flex items-center justify-center [&_iframe]:bg-white"
-            />
-          )}
-        </div>
-        {!ready && (
-          <div className="absolute inset-0 flex items-center justify-center font-mono text-xs uppercase tracking-widest text-fg-2 pointer-events-none">
-            Loading replay...
+            )}
           </div>
-        )}
-      </div>
-
-      <div className="h-11 bg-bg-1 border-t border-border-ghost px-3 flex items-center gap-3">
-        <button
-          type="button"
-          onClick={togglePlay}
-          aria-label={playing ? 'Pause' : 'Play'}
-          disabled={!ready}
-          className="w-6 h-6 flex items-center justify-center text-accent hover:text-accent-hover transition-colors duration-100 disabled:opacity-50"
-        >
-          {playing ? (
-            <Pause size={14} strokeWidth={2} />
-          ) : (
-            <Play size={14} strokeWidth={2} />
+          {!ready && (
+            <div className="absolute inset-0 flex items-center justify-center font-mono text-xs uppercase tracking-widest text-fg-2 pointer-events-none">
+              Loading replay...
+            </div>
           )}
-        </button>
+        </div>
 
-        <ScrubBar
-          currentMs={currentMs}
-          durationMs={durationMs}
-          markerOffsets={markerOffsets}
-          errorOffsetMs={errorOffsetMs}
-          onChange={handleScrubChange}
-          disabled={!ready}
-        />
+        <div className="h-11 bg-bg-1 border-t border-border-ghost px-3 flex items-center gap-3">
+          <button
+            type="button"
+            onClick={togglePlay}
+            aria-label={playing ? 'Pause' : 'Play'}
+            disabled={!ready}
+            className="w-6 h-6 flex items-center justify-center text-accent hover:text-accent-hover transition-colors duration-100 disabled:opacity-50"
+          >
+            {playing ? (
+              <Pause size={14} strokeWidth={2} />
+            ) : (
+              <Play size={14} strokeWidth={2} />
+            )}
+          </button>
 
-        <span className="font-mono text-[11px] tabular-nums text-fg-1 shrink-0 whitespace-nowrap">
-          {formatTime(currentMs)} / {formatTime(durationMs)}
-        </span>
+          <ScrubBar
+            currentMs={currentMs}
+            durationMs={durationMs}
+            markerOffsets={markerOffsets}
+            errorOffsetMs={errorOffsetMs}
+            onChange={handleScrubChange}
+            disabled={!ready}
+          />
 
-        <div className="flex items-center gap-1 shrink-0">
-          {SPEEDS.map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => changeSpeed(s)}
-              className={clsx(
-                'h-6 px-1.5 font-mono text-[11px] tabular-nums transition-colors duration-100',
-                speed === s ? 'text-accent' : 'text-fg-2 hover:text-fg-0',
-              )}
-            >
-              {s}x
-            </button>
-          ))}
+          <span className="font-mono text-[11px] tabular-nums text-fg-1 shrink-0 whitespace-nowrap">
+            {formatTime(currentMs)} / {formatTime(durationMs)}
+          </span>
+
+          <div className="flex items-center gap-1 shrink-0">
+            {SPEEDS.map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => changeSpeed(s)}
+                className={clsx(
+                  'h-6 px-1.5 font-mono text-[11px] tabular-nums transition-colors duration-100',
+                  speed === s ? 'text-accent' : 'text-fg-2 hover:text-fg-0',
+                )}
+              >
+                {s}x
+              </button>
+            ))}
+          </div>
         </div>
       </div>
-    </div>
-  );
-}
+    );
+  },
+);
 
 function ScrubBar({
   currentMs,

@@ -4,8 +4,11 @@ import clsx from 'clsx';
 import { Bell, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { useMemo, useState } from 'react';
-import { DockedPlayer } from '@/components/DockedPlayer';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import {
+  DockedPlayer,
+  type DockedPlayerHandle,
+} from '@/components/DockedPlayer';
 import { ApiError } from '@/lib/api';
 import {
   useIssue,
@@ -13,14 +16,24 @@ import {
   type EventMetadata,
   type IssueDetail,
   type IssueStatus,
+  type NetworkSessionEvent,
 } from '@/queries/issues';
 
 type TabId = 'dom' | 'stack' | 'network' | 'console';
+
+// Mirror of MIN_REPLAY_EVENTS in @crashpad/sdk core/capture.ts. A replay
+// shorter than this is empty by definition (just the rrweb meta event).
+const MIN_REPLAY_EVENTS = 2;
 
 export default function IssueDetailPage() {
   const { id } = useParams<{ id: string }>();
   const query = useIssue(id);
   const [tab, setTab] = useState<TabId>('dom');
+  const playerRef = useRef<DockedPlayerHandle>(null);
+  const [currentMs, setCurrentMs] = useState(0);
+  const handleSeek = useCallback((ms: number) => {
+    playerRef.current?.seek(ms);
+  }, []);
 
   if (query.isPending) return <PageLoading />;
   if (query.isError) {
@@ -40,13 +53,23 @@ export default function IssueDetailPage() {
       <IssueTitle detail={data} />
       <div className="grid grid-cols-[1fr_440px] grid-rows-[1fr] gap-px bg-border-ghost flex-1 min-h-0">
         <div className="bg-bg-0 min-w-0 min-h-0 overflow-hidden">
-          <ReplayPane detail={data} />
+          <ReplayPane
+            detail={data}
+            playerRef={playerRef}
+            onTimeChange={setCurrentMs}
+          />
         </div>
         <div className="bg-bg-1 min-w-0 min-h-0 overflow-hidden">
           <StackTracePanel detail={data} />
         </div>
       </div>
-      <BottomTabs tab={tab} onTab={setTab} detail={data} />
+      <BottomTabs
+        tab={tab}
+        onTab={setTab}
+        detail={data}
+        currentMs={currentMs}
+        onSeek={handleSeek}
+      />
     </main>
   );
 }
@@ -199,10 +222,18 @@ function Dot() {
   return <span className="text-fg-2">·</span>;
 }
 
-function ReplayPane({ detail }: { detail: IssueDetail }) {
+function ReplayPane({
+  detail,
+  playerRef,
+  onTimeChange,
+}: {
+  detail: IssueDetail;
+  playerRef: React.RefObject<DockedPlayerHandle | null>;
+  onTimeChange: (ms: number) => void;
+}) {
   const { replay, latestEvent } = detail;
 
-  if (!replay || replay.rrwebData.length === 0) {
+  if (!replay || replay.rrwebData.length < MIN_REPLAY_EVENTS) {
     return (
       <div className="h-full flex items-center justify-center px-6 text-center">
         <div className="max-w-sm">
@@ -225,10 +256,12 @@ function ReplayPane({ detail }: { detail: IssueDetail }) {
 
   return (
     <DockedPlayer
+      ref={playerRef}
       rrwebData={replay.rrwebData}
       durationMs={replay.durationMs}
       markerOffsets={markers?.eventOffsets ?? []}
       errorOffsetMs={errorOffsetMs}
+      onTimeChange={onTimeChange}
     />
   );
 }
@@ -293,13 +326,25 @@ function BottomTabs({
   tab,
   onTab,
   detail,
+  currentMs,
+  onSeek,
 }: {
   tab: TabId;
   onTab: (t: TabId) => void;
   detail: IssueDetail;
+  currentMs: number;
+  onSeek: (ms: number) => void;
 }) {
+  const networkEvents = useMemo<NetworkSessionEvent[]>(() => {
+    const all = detail.replay?.sessionEvents ?? [];
+    return all.filter((e): e is NetworkSessionEvent => e.type === 'network');
+  }, [detail.replay?.sessionEvents]);
+
+  const bufferStart =
+    detail.latestEvent?.metadata.timelineMarkers?.bufferStartTimestamp ?? null;
+
   return (
-    <section className="border-t border-border-ghost shrink-0 flex flex-col max-h-[40vh]">
+    <section className="border-t border-border-ghost shrink-0 flex flex-col h-[30vh]">
       <div className="flex h-11 px-6 items-center gap-6 border-b border-border-ghost shrink-0">
         <TabButton id="dom" tab={tab} onTab={onTab} label="DOM" />
         <TabButton id="stack" tab={tab} onTab={onTab} label="STACK" />
@@ -308,8 +353,7 @@ function BottomTabs({
           tab={tab}
           onTab={onTab}
           label="NETWORK"
-          badge="v1.5"
-          disabled
+          count={networkEvents.length}
         />
         <TabButton
           id="console"
@@ -320,10 +364,26 @@ function BottomTabs({
           disabled
         />
       </div>
-      <div className="px-6 py-5 overflow-y-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto">
         {tab === 'dom' && <MetaGrid detail={detail} />}
-        {tab === 'stack' && <StackRawPanel detail={detail} />}
-        {(tab === 'network' || tab === 'console') && <ComingSoon />}
+        {tab === 'stack' && (
+          <div className="px-6 py-5">
+            <StackRawPanel detail={detail} />
+          </div>
+        )}
+        {tab === 'network' && (
+          <NetworkPanel
+            events={networkEvents}
+            bufferStart={bufferStart}
+            currentMs={currentMs}
+            onSeek={onSeek}
+          />
+        )}
+        {tab === 'console' && (
+          <div className="px-6 py-5">
+            <ComingSoon />
+          </div>
+        )}
       </div>
     </section>
   );
@@ -335,6 +395,7 @@ function TabButton({
   onTab,
   label,
   badge,
+  count,
   disabled,
 }: {
   id: TabId;
@@ -342,6 +403,7 @@ function TabButton({
   onTab: (t: TabId) => void;
   label: string;
   badge?: string;
+  count?: number;
   disabled?: boolean;
 }) {
   const active = tab === id;
@@ -360,6 +422,16 @@ function TabButton({
       )}
     >
       {label}
+      {typeof count === 'number' && count > 0 && (
+        <span
+          className={clsx(
+            'inline-flex h-4 px-1 items-center bg-bg-3 text-[10px] tabular-nums tracking-normal',
+            active ? 'text-accent' : 'text-fg-1',
+          )}
+        >
+          {count}
+        </span>
+      )}
       {badge && (
         <span className="inline-flex h-4 px-1 items-center bg-bg-3 text-[9px] text-fg-2 tracking-wider">
           {badge}
@@ -379,9 +451,11 @@ function MetaGrid({ detail }: { detail: IssueDetail }) {
   const e = detail.latestEvent;
   if (!e) {
     return (
-      <p className="font-mono text-xs text-fg-2 uppercase tracking-widest">
-        No event metadata.
-      </p>
+      <div className="px-6 py-5 h-full">
+        <p className="font-mono text-xs text-fg-2 uppercase tracking-widest">
+          No event metadata.
+        </p>
+      </div>
     );
   }
   const m: EventMetadata = e.metadata;
@@ -389,7 +463,7 @@ function MetaGrid({ detail }: { detail: IssueDetail }) {
   const os = parseOS(m.userAgent);
 
   return (
-    <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-3">
+    <dl className="h-full px-6 py-5 grid grid-cols-1 md:grid-cols-2 gap-x-12 grid-rows-[repeat(4,minmax(0,1fr))]">
       <MetaRow label="Browser" value={browser} />
       <MetaRow label="Release" value={e.release ?? '—'} mono />
       <MetaRow label="OS" value={os} />
@@ -452,6 +526,171 @@ function StackRawPanel({ detail }: { detail: IssueDetail }) {
       {stack}
     </pre>
   );
+}
+
+function NetworkPanel({
+  events,
+  bufferStart,
+  currentMs,
+  onSeek,
+}: {
+  events: NetworkSessionEvent[];
+  bufferStart: number | null;
+  currentMs: number;
+  onSeek: (ms: number) => void;
+}) {
+  const rows = useMemo(() => {
+    if (bufferStart === null) return [];
+    return events
+      .map((e) => ({
+        event: e,
+        offsetMs: Math.max(0, e.timestamp - bufferStart),
+      }))
+      .sort((a, b) => a.offsetMs - b.offsetMs);
+  }, [events, bufferStart]);
+
+  const activeIndex = useMemo(() => {
+    if (rows.length === 0) return -1;
+    let idx = -1;
+    for (let i = 0; i < rows.length; i++) {
+      if (rows[i]!.offsetMs <= currentMs) idx = i;
+      else break;
+    }
+    return idx;
+  }, [rows, currentMs]);
+
+  if (events.length === 0) {
+    return (
+      <div className="py-8 text-center">
+        <p className="font-mono text-xs uppercase tracking-widest text-fg-2">
+          No network activity captured
+        </p>
+        <p className="mt-2 font-body text-sm text-fg-1">
+          The SDK records fetch and XHR requests during the 30s replay buffer.
+          Calls before init or outside that window are not shown.
+        </p>
+      </div>
+    );
+  }
+
+  if (bufferStart === null) {
+    return (
+      <div className="py-8 text-center">
+        <p className="font-mono text-xs uppercase tracking-widest text-fg-2">
+          Replay timeline unavailable
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="grid grid-cols-[60px_1fr_60px_80px_70px] gap-3 px-6 h-8 items-center border-b border-border-ghost font-mono text-[10px] uppercase tracking-widest text-fg-2 sticky top-0 bg-bg-1 z-10">
+        <span>Method</span>
+        <span>URL</span>
+        <span>Status</span>
+        <span className="text-right">Duration</span>
+        <span className="text-right">Time</span>
+      </div>
+      <ul className="font-mono text-[12px]">
+        {rows.map(({ event, offsetMs }, i) => (
+          <NetworkRow
+            key={i}
+            event={event}
+            offsetMs={offsetMs}
+            isActive={i === activeIndex}
+            onClick={() => onSeek(offsetMs)}
+          />
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function NetworkRow({
+  event,
+  offsetMs,
+  isActive,
+  onClick,
+}: {
+  event: NetworkSessionEvent;
+  offsetMs: number;
+  isActive: boolean;
+  onClick: () => void;
+}) {
+  const failed = event.failed === true || event.status === null;
+  const status = event.status;
+  const statusTone = failed
+    ? 'text-[color:var(--color-error)]'
+    : status !== null && status >= 500
+      ? 'text-[color:var(--color-error)]'
+      : status !== null && status >= 400
+        ? 'text-accent'
+        : 'text-fg-1';
+
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={onClick}
+        className={clsx(
+          'w-full grid grid-cols-[60px_1fr_60px_80px_70px] gap-3 px-6 h-8 items-center text-left transition-colors duration-75 cursor-pointer border-b border-border-ghost',
+          isActive ? 'bg-accent/15 text-fg-0' : 'hover:bg-bg-2',
+        )}
+      >
+        <span
+          className={clsx('font-bold', isActive ? 'text-accent' : 'text-fg-1')}
+        >
+          {event.method}
+        </span>
+        <span
+          className={clsx('truncate', isActive ? 'text-fg-0' : 'text-fg-1')}
+          title={event.url}
+        >
+          {prettyUrl(event.url)}
+        </span>
+        <span className={clsx('tabular-nums', statusTone)}>
+          {failed ? 'ERR' : status}
+        </span>
+        <span
+          className={clsx(
+            'text-right tabular-nums',
+            isActive ? 'text-fg-1' : 'text-fg-2',
+          )}
+        >
+          {formatDuration(event.durationMs)}
+        </span>
+        <span
+          className={clsx(
+            'text-right tabular-nums',
+            isActive ? 'text-fg-1' : 'text-fg-2',
+          )}
+        >
+          {formatOffset(offsetMs)}
+        </span>
+      </button>
+    </li>
+  );
+}
+
+function prettyUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    const path = u.pathname + (u.search || '');
+    return `${u.host}${path}`;
+  } catch {
+    return url;
+  }
+}
+
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  return `${(ms / 1000).toFixed(2)}s`;
+}
+
+function formatOffset(ms: number): string {
+  const total = ms / 1000;
+  return `+${total.toFixed(2)}s`;
 }
 
 function ComingSoon() {

@@ -45,12 +45,26 @@ export type IssueEvent = {
   createdAt: string;
 };
 
+export type NetworkSessionEvent = {
+  type: 'network';
+  timestamp: number;
+  method: string;
+  url: string;
+  status: number | null;
+  durationMs: number;
+  initiator: 'fetch' | 'xhr';
+  failed?: boolean;
+};
+
+export type SessionEvent = NetworkSessionEvent;
+
 export type IssueReplay = {
   id: string;
   projectId: string;
   correlationId: string;
   rrwebData: unknown[];
   durationMs: number;
+  sessionEvents: SessionEvent[];
   createdAt: string;
 };
 
