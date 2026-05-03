@@ -149,7 +149,46 @@ export interface EventPayload {
  * align entries against the rrweb timeline using the replay's buffer
  * start timestamp.
  */
-export type SessionEvent = NetworkSessionEvent;
+export type SessionEvent = NetworkSessionEvent | ConsoleSessionEvent;
+
+/**
+ * Which `console` method was invoked. Mirrors the standard subset that
+ * DevTools surfaces with distinct icons; methods like `console.table` /
+ * `console.group` are out of scope in v1.
+ */
+export type ConsoleLevel = 'log' | 'info' | 'warn' | 'error' | 'debug';
+
+/**
+ * A `console.*` call captured during the replay buffer window. v1 captures
+ * the level, arguments, and timestamp — but not the call-site stack trace
+ * (deferred to v1.5 alongside source-mapping).
+ *
+ * **PII WARNING:** arguments are captured verbatim through a depth-and-size
+ * limited serializer. If your app prints user data — emails, IDs, request
+ * bodies, tokens — to the console, those values will land in the replay
+ * payload. Treat console output as a debugging surface, not a data sink,
+ * or use `console.log` sparingly in production. A `maskConsole` config
+ * option to filter or redact arguments is on the v1.5 roadmap, paired
+ * with `maskUrls`.
+ */
+export interface ConsoleSessionEvent {
+  type: 'console';
+  /** Wall-clock ms (Date.now()) when the call was made. */
+  timestamp: number;
+  /** Which `console` method was invoked. */
+  level: ConsoleLevel;
+  /**
+   * Arguments after serialization. Primitives pass through; objects are
+   * walked to a max depth of 4 with circular references replaced by the
+   * sentinel string `'[Circular]'`. Long strings are truncated with a
+   * `'… (+N chars)'` suffix; over-cap arrays / objects gain a sentinel
+   * entry indicating how many items were dropped. `Error` instances are
+   * preserved as `{ __type: 'Error', name, message, stack }`. DOM nodes,
+   * functions, symbols, BigInts, Maps, Sets, Dates, and RegExps render as
+   * compact descriptors (e.g. `'[Function: foo]'`).
+   */
+  args: unknown[];
+}
 
 /**
  * A network request captured from `fetch` or `XMLHttpRequest`. v1 deliberately

@@ -56,7 +56,16 @@ export type NetworkSessionEvent = {
   failed?: boolean;
 };
 
-export type SessionEvent = NetworkSessionEvent;
+export type ConsoleLevel = 'log' | 'info' | 'warn' | 'error' | 'debug';
+
+export type ConsoleSessionEvent = {
+  type: 'console';
+  timestamp: number;
+  level: ConsoleLevel;
+  args: unknown[];
+};
+
+export type SessionEvent = NetworkSessionEvent | ConsoleSessionEvent;
 
 export type IssueReplay = {
   id: string;

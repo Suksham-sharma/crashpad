@@ -229,7 +229,16 @@ export interface NetworkSessionEvent {
   failed?: boolean;
 }
 
-export type SessionEvent = NetworkSessionEvent;
+export type ConsoleLevel = 'log' | 'info' | 'warn' | 'error' | 'debug';
+
+export interface ConsoleSessionEvent {
+  type: 'console';
+  timestamp: number;
+  level: ConsoleLevel;
+  args: unknown[];
+}
+
+export type SessionEvent = NetworkSessionEvent | ConsoleSessionEvent;
 
 export const replays = pgTable(
   'replays',

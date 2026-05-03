@@ -210,7 +210,7 @@ export function uninstallNetworkCapture(): void {
   });
 }
 
-export function snapshotSessionEvents(): NetworkSessionEvent[] {
+export function snapshotNetworkEvents(): NetworkSessionEvent[] {
   pruneByTime();
   enforceCap();
   return buffer.slice();

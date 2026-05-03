@@ -13,6 +13,8 @@ import { ApiError } from '@/lib/api';
 import {
   useIssue,
   useUpdateIssueStatus,
+  type ConsoleLevel,
+  type ConsoleSessionEvent,
   type EventMetadata,
   type IssueDetail,
   type IssueStatus,
@@ -340,6 +342,11 @@ function BottomTabs({
     return all.filter((e): e is NetworkSessionEvent => e.type === 'network');
   }, [detail.replay?.sessionEvents]);
 
+  const consoleEvents = useMemo<ConsoleSessionEvent[]>(() => {
+    const all = detail.replay?.sessionEvents ?? [];
+    return all.filter((e): e is ConsoleSessionEvent => e.type === 'console');
+  }, [detail.replay?.sessionEvents]);
+
   const bufferStart =
     detail.latestEvent?.metadata.timelineMarkers?.bufferStartTimestamp ?? null;
 
@@ -360,8 +367,7 @@ function BottomTabs({
           tab={tab}
           onTab={onTab}
           label="CONSOLE"
-          badge="v1.5"
-          disabled
+          count={consoleEvents.length}
         />
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto">
@@ -380,9 +386,12 @@ function BottomTabs({
           />
         )}
         {tab === 'console' && (
-          <div className="px-6 py-5">
-            <ComingSoon />
-          </div>
+          <ConsolePanel
+            events={consoleEvents}
+            bufferStart={bufferStart}
+            currentMs={currentMs}
+            onSeek={onSeek}
+          />
         )}
       </div>
     </section>
@@ -693,17 +702,284 @@ function formatOffset(ms: number): string {
   return `+${total.toFixed(2)}s`;
 }
 
-function ComingSoon() {
+type ConsoleFilter = 'all' | 'error' | 'warn' | 'log';
+
+function matchesConsoleFilter(
+  level: ConsoleLevel,
+  filter: ConsoleFilter,
+): boolean {
+  if (filter === 'all') return true;
+  if (filter === 'error') return level === 'error';
+  if (filter === 'warn') return level === 'warn';
+  return level === 'log' || level === 'info' || level === 'debug';
+}
+
+function ConsolePanel({
+  events,
+  bufferStart,
+  currentMs,
+  onSeek,
+}: {
+  events: ConsoleSessionEvent[];
+  bufferStart: number | null;
+  currentMs: number;
+  onSeek: (ms: number) => void;
+}) {
+  const [filter, setFilter] = useState<ConsoleFilter>('all');
+
+  const rows = useMemo(() => {
+    if (bufferStart === null) return [];
+    return events
+      .filter((e) => matchesConsoleFilter(e.level, filter))
+      .map((e) => ({
+        event: e,
+        offsetMs: Math.max(0, e.timestamp - bufferStart),
+      }))
+      .sort((a, b) => a.offsetMs - b.offsetMs);
+  }, [events, bufferStart, filter]);
+
+  const activeIndex = useMemo(() => {
+    if (rows.length === 0) return -1;
+    let idx = -1;
+    for (let i = 0; i < rows.length; i++) {
+      if (rows[i]!.offsetMs <= currentMs) idx = i;
+      else break;
+    }
+    return idx;
+  }, [rows, currentMs]);
+
+  if (events.length === 0) {
+    return (
+      <div className="py-8 text-center">
+        <p className="font-mono text-xs uppercase tracking-widest text-fg-2">
+          No console activity captured
+        </p>
+        <p className="mt-2 font-body text-sm text-fg-1">
+          The SDK records console.log / info / warn / error / debug calls
+          during the 30s replay buffer. Calls before init or outside that
+          window are not shown.
+        </p>
+      </div>
+    );
+  }
+
+  if (bufferStart === null) {
+    return (
+      <div className="py-8 text-center">
+        <p className="font-mono text-xs uppercase tracking-widest text-fg-2">
+          Replay timeline unavailable
+        </p>
+      </div>
+    );
+  }
+
   return (
-    <div className="py-8 text-center">
-      <p className="font-mono text-xs uppercase tracking-widest text-fg-2">
-        Ships in v1.5
-      </p>
-      <p className="mt-2 font-body text-sm text-fg-1">
-        The SDK already captures this data. The panel lands next release.
-      </p>
+    <div>
+      <div className="flex items-center gap-1 px-6 h-9 border-b border-border-ghost sticky top-0 bg-bg-1 z-10">
+        <ConsoleFilterChip
+          label="ALL"
+          active={filter === 'all'}
+          onClick={() => setFilter('all')}
+          count={events.length}
+        />
+        <ConsoleFilterChip
+          label="ERROR"
+          active={filter === 'error'}
+          onClick={() => setFilter('error')}
+          count={events.filter((e) => e.level === 'error').length}
+          tone="error"
+        />
+        <ConsoleFilterChip
+          label="WARN"
+          active={filter === 'warn'}
+          onClick={() => setFilter('warn')}
+          count={events.filter((e) => e.level === 'warn').length}
+          tone="warn"
+        />
+        <ConsoleFilterChip
+          label="LOG"
+          active={filter === 'log'}
+          onClick={() => setFilter('log')}
+          count={
+            events.filter(
+              (e) =>
+                e.level === 'log' ||
+                e.level === 'info' ||
+                e.level === 'debug',
+            ).length
+          }
+        />
+      </div>
+      {rows.length === 0 ? (
+        <div className="py-8 text-center">
+          <p className="font-mono text-xs uppercase tracking-widest text-fg-2">
+            No entries match this filter
+          </p>
+        </div>
+      ) : (
+        <ul className="font-mono text-[12px]">
+          {rows.map(({ event, offsetMs }, i) => (
+            <ConsoleRow
+              key={i}
+              event={event}
+              offsetMs={offsetMs}
+              isActive={i === activeIndex}
+              onClick={() => onSeek(offsetMs)}
+            />
+          ))}
+        </ul>
+      )}
     </div>
   );
+}
+
+function ConsoleFilterChip({
+  label,
+  active,
+  onClick,
+  count,
+  tone,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  count: number;
+  tone?: 'error' | 'warn';
+}) {
+  const dotClass =
+    tone === 'error'
+      ? 'bg-[color:var(--color-error)]'
+      : tone === 'warn'
+        ? 'bg-accent'
+        : 'bg-fg-2';
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={clsx(
+        'h-7 px-2 inline-flex items-center gap-1.5 font-mono text-[10px] font-bold uppercase tracking-widest transition-colors duration-100',
+        active
+          ? 'bg-accent-muted text-accent'
+          : 'text-fg-1 hover:text-fg-0 hover:bg-bg-2',
+      )}
+    >
+      <span className={clsx('h-1.5 w-1.5', dotClass)} />
+      {label}
+      <span
+        className={clsx(
+          'tabular-nums tracking-normal',
+          active ? 'text-accent' : 'text-fg-2',
+        )}
+      >
+        {count}
+      </span>
+    </button>
+  );
+}
+
+function ConsoleRow({
+  event,
+  offsetMs,
+  isActive,
+  onClick,
+}: {
+  event: ConsoleSessionEvent;
+  offsetMs: number;
+  isActive: boolean;
+  onClick: () => void;
+}) {
+  const tone = consoleLevelTone(event.level);
+  const message = formatConsoleArgs(event.args);
+
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={onClick}
+        className={clsx(
+          'w-full grid grid-cols-[60px_1fr_70px] gap-3 px-6 min-h-8 py-1 items-start text-left transition-colors duration-75 cursor-pointer border-b border-border-ghost',
+          isActive ? 'bg-accent/15' : 'hover:bg-bg-2',
+        )}
+      >
+        <span
+          className={clsx(
+            'inline-flex items-center gap-1.5 pt-1 font-bold tracking-widest text-[10px]',
+            tone.text,
+          )}
+        >
+          <span className={clsx('h-1.5 w-1.5', tone.dot)} />
+          {event.level.toUpperCase()}
+        </span>
+        <span
+          className={clsx(
+            'whitespace-pre-wrap break-words pt-0.5',
+            isActive ? 'text-fg-0' : tone.text,
+          )}
+        >
+          {message}
+        </span>
+        <span
+          className={clsx(
+            'text-right tabular-nums pt-1',
+            isActive ? 'text-fg-1' : 'text-fg-2',
+          )}
+        >
+          {formatOffset(offsetMs)}
+        </span>
+      </button>
+    </li>
+  );
+}
+
+function consoleLevelTone(level: ConsoleLevel): { text: string; dot: string } {
+  switch (level) {
+    case 'error':
+      return {
+        text: 'text-[color:var(--color-error)]',
+        dot: 'bg-[color:var(--color-error)]',
+      };
+    case 'warn':
+      return { text: 'text-accent', dot: 'bg-accent' };
+    case 'info':
+      return { text: 'text-fg-0', dot: 'bg-fg-1' };
+    case 'debug':
+      return { text: 'text-fg-2', dot: 'bg-fg-2' };
+    case 'log':
+    default:
+      return { text: 'text-fg-1', dot: 'bg-fg-2' };
+  }
+}
+
+const ARG_MAX_LEN = 280;
+
+function formatConsoleArgs(args: unknown[]): string {
+  return args.map(formatArg).join(' ');
+}
+
+function formatArg(a: unknown): string {
+  if (a === null) return 'null';
+  if (a === undefined) return 'undefined';
+  if (typeof a === 'string') return truncateForRow(a);
+  if (typeof a === 'number' || typeof a === 'boolean') return String(a);
+  if (typeof a === 'object') {
+    const obj = a as Record<string, unknown>;
+    if (obj.__type === 'Error') {
+      const name = typeof obj.name === 'string' ? obj.name : 'Error';
+      const msg = typeof obj.message === 'string' ? obj.message : '';
+      return `${name}: ${msg}`;
+    }
+    try {
+      const json = JSON.stringify(a);
+      return truncateForRow(json);
+    } catch {
+      return '[Object]';
+    }
+  }
+  return String(a);
+}
+
+function truncateForRow(s: string): string {
+  return s.length > ARG_MAX_LEN ? `${s.slice(0, ARG_MAX_LEN)}…` : s;
 }
 
 function PageLoading() {

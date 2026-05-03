@@ -8,7 +8,8 @@ import { getConfig } from './config';
 import { newCorrelationId } from './session';
 import { sendEvent, sendReplay } from './transport';
 import { snapshotReplay, isReplayRunning } from './replay';
-import { snapshotSessionEvents } from './network';
+import { snapshotNetworkEvents } from './network';
+import { snapshotConsoleEvents } from './console';
 import { safe, safeAsync } from './safe';
 
 interface NormalizedError {
@@ -113,7 +114,7 @@ export async function report(input: unknown): Promise<void> {
     ? snapshotReplay()
     : { events: [], durationMs: 0 };
   const sessionEvents = filterIngestNoise(
-    snapshotSessionEvents(),
+    [...snapshotNetworkEvents(), ...snapshotConsoleEvents()],
     config.apiUrl,
   );
   const errorTimestamp = Date.now();
