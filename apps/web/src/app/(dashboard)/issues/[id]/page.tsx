@@ -1,7 +1,7 @@
 'use client';
 
 import clsx from 'clsx';
-import { Bell, Settings } from 'lucide-react';
+import { Bell, ChevronsDown, ChevronsUp, Settings } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useMemo, useRef, useState } from 'react';
@@ -31,6 +31,7 @@ export default function IssueDetailPage() {
   const { id } = useParams<{ id: string }>();
   const query = useIssue(id);
   const [tab, setTab] = useState<TabId>('dom');
+  const [panelExpanded, setPanelExpanded] = useState(false);
   const playerRef = useRef<DockedPlayerHandle>(null);
   const [currentMs, setCurrentMs] = useState(0);
   const handleSeek = useCallback((ms: number) => {
@@ -71,6 +72,8 @@ export default function IssueDetailPage() {
         detail={data}
         currentMs={currentMs}
         onSeek={handleSeek}
+        expanded={panelExpanded}
+        onToggleExpand={() => setPanelExpanded((v) => !v)}
       />
     </main>
   );
@@ -330,12 +333,16 @@ function BottomTabs({
   detail,
   currentMs,
   onSeek,
+  expanded,
+  onToggleExpand,
 }: {
   tab: TabId;
   onTab: (t: TabId) => void;
   detail: IssueDetail;
   currentMs: number;
   onSeek: (ms: number) => void;
+  expanded: boolean;
+  onToggleExpand: () => void;
 }) {
   const networkEvents = useMemo<NetworkSessionEvent[]>(() => {
     const all = detail.replay?.sessionEvents ?? [];
@@ -351,7 +358,12 @@ function BottomTabs({
     detail.latestEvent?.metadata.timelineMarkers?.bufferStartTimestamp ?? null;
 
   return (
-    <section className="border-t border-border-ghost shrink-0 flex flex-col h-[30vh]">
+    <section
+      className={clsx(
+        'border-t border-border-ghost shrink-0 flex flex-col transition-[height] duration-150',
+        expanded ? 'h-[60vh]' : 'h-[30vh]',
+      )}
+    >
       <div className="flex h-11 px-6 items-center gap-6 border-b border-border-ghost shrink-0">
         <TabButton id="dom" tab={tab} onTab={onTab} label="DOM" />
         <TabButton id="stack" tab={tab} onTab={onTab} label="STACK" />
@@ -369,6 +381,19 @@ function BottomTabs({
           label="CONSOLE"
           count={consoleEvents.length}
         />
+        <button
+          type="button"
+          onClick={onToggleExpand}
+          aria-label={expanded ? 'Collapse panel' : 'Expand panel'}
+          title={expanded ? 'Collapse panel' : 'Expand panel'}
+          className="ml-auto h-8 w-8 inline-flex items-center justify-center text-fg-0 bg-bg-2 hover:bg-bg-3 transition-colors duration-100"
+        >
+          {expanded ? (
+            <ChevronsDown size={18} strokeWidth={2} />
+          ) : (
+            <ChevronsUp size={18} strokeWidth={2} />
+          )}
+        </button>
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto">
         {tab === 'dom' && <MetaGrid detail={detail} />}
@@ -434,8 +459,8 @@ function TabButton({
       {typeof count === 'number' && count > 0 && (
         <span
           className={clsx(
-            'inline-flex h-4 px-1 items-center bg-bg-3 text-[10px] tabular-nums tracking-normal',
-            active ? 'text-accent' : 'text-fg-1',
+            'text-[10px] tabular-nums tracking-normal',
+            active ? 'text-accent' : 'text-fg-2',
           )}
         >
           {count}
@@ -472,7 +497,7 @@ function MetaGrid({ detail }: { detail: IssueDetail }) {
   const os = parseOS(m.userAgent);
 
   return (
-    <dl className="h-full px-6 py-5 grid grid-cols-1 md:grid-cols-2 gap-x-12 grid-rows-[repeat(4,minmax(0,1fr))]">
+    <dl className="px-6 py-5 grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-3">
       <MetaRow label="Browser" value={browser} />
       <MetaRow label="Release" value={e.release ?? '—'} mono />
       <MetaRow label="OS" value={os} />
@@ -775,40 +800,33 @@ function ConsolePanel({
 
   return (
     <div>
-      <div className="flex items-center gap-1 px-6 h-9 border-b border-border-ghost sticky top-0 bg-bg-1 z-10">
-        <ConsoleFilterChip
-          label="ALL"
-          active={filter === 'all'}
-          onClick={() => setFilter('all')}
-          count={events.length}
-        />
-        <ConsoleFilterChip
-          label="ERROR"
-          active={filter === 'error'}
-          onClick={() => setFilter('error')}
-          count={events.filter((e) => e.level === 'error').length}
-          tone="error"
-        />
-        <ConsoleFilterChip
-          label="WARN"
-          active={filter === 'warn'}
-          onClick={() => setFilter('warn')}
-          count={events.filter((e) => e.level === 'warn').length}
-          tone="warn"
-        />
-        <ConsoleFilterChip
-          label="LOG"
-          active={filter === 'log'}
-          onClick={() => setFilter('log')}
-          count={
-            events.filter(
-              (e) =>
-                e.level === 'log' ||
-                e.level === 'info' ||
-                e.level === 'debug',
-            ).length
-          }
-        />
+      <div className="grid grid-cols-[60px_1fr_70px] gap-3 px-6 h-8 items-center border-b border-border-ghost font-mono text-[10px] uppercase tracking-widest text-fg-2 sticky top-0 bg-bg-1 z-10">
+        <span>Level</span>
+        <span className="flex items-center gap-5 normal-case tracking-normal text-fg-1">
+          <ConsoleFilterChip
+            label="all"
+            active={filter === 'all'}
+            onClick={() => setFilter('all')}
+          />
+          <ConsoleFilterChip
+            label="error"
+            active={filter === 'error'}
+            onClick={() => setFilter('error')}
+            tone="error"
+          />
+          <ConsoleFilterChip
+            label="warn"
+            active={filter === 'warn'}
+            onClick={() => setFilter('warn')}
+            tone="warn"
+          />
+          <ConsoleFilterChip
+            label="log"
+            active={filter === 'log'}
+            onClick={() => setFilter('log')}
+          />
+        </span>
+        <span className="text-right">Time</span>
       </div>
       {rows.length === 0 ? (
         <div className="py-8 text-center">
@@ -837,42 +855,30 @@ function ConsoleFilterChip({
   label,
   active,
   onClick,
-  count,
   tone,
 }: {
   label: string;
   active: boolean;
   onClick: () => void;
-  count: number;
   tone?: 'error' | 'warn';
 }) {
-  const dotClass =
+  const toneText =
     tone === 'error'
-      ? 'bg-[color:var(--color-error)]'
+      ? 'text-[color:var(--color-error)]'
       : tone === 'warn'
-        ? 'bg-accent'
-        : 'bg-fg-2';
+        ? 'text-accent'
+        : 'text-fg-1';
   return (
     <button
       type="button"
       onClick={onClick}
       className={clsx(
-        'h-7 px-2 inline-flex items-center gap-1.5 font-mono text-[10px] font-bold uppercase tracking-widest transition-colors duration-100',
-        active
-          ? 'bg-accent-muted text-accent'
-          : 'text-fg-1 hover:text-fg-0 hover:bg-bg-2',
+        'inline-flex h-7 items-center font-mono text-xs transition-opacity duration-100 cursor-pointer',
+        toneText,
+        active ? 'opacity-100' : 'opacity-90',
       )}
     >
-      <span className={clsx('h-1.5 w-1.5', dotClass)} />
       {label}
-      <span
-        className={clsx(
-          'tabular-nums tracking-normal',
-          active ? 'text-accent' : 'text-fg-2',
-        )}
-      >
-        {count}
-      </span>
     </button>
   );
 }
@@ -897,30 +903,27 @@ function ConsoleRow({
         type="button"
         onClick={onClick}
         className={clsx(
-          'w-full grid grid-cols-[60px_1fr_70px] gap-3 px-6 min-h-8 py-1 items-start text-left transition-colors duration-75 cursor-pointer border-b border-border-ghost',
-          isActive ? 'bg-accent/15' : 'hover:bg-bg-2',
+          'w-full grid grid-cols-[60px_1fr_70px] gap-3 px-6 h-8 items-center text-left transition-colors duration-75 cursor-pointer border-b border-border-ghost',
+          isActive ? 'bg-accent/15 text-fg-0' : 'hover:bg-bg-2',
         )}
       >
         <span
-          className={clsx(
-            'inline-flex items-center gap-1.5 pt-1 font-bold tracking-widest text-[10px]',
-            tone.text,
-          )}
+          className={clsx('font-bold', isActive ? 'text-accent' : tone.text)}
         >
-          <span className={clsx('h-1.5 w-1.5', tone.dot)} />
           {event.level.toUpperCase()}
         </span>
         <span
           className={clsx(
-            'whitespace-pre-wrap break-words pt-0.5',
-            isActive ? 'text-fg-0' : tone.text,
+            'truncate',
+            isActive ? 'text-fg-0' : 'text-fg-1',
           )}
+          title={message}
         >
           {message}
         </span>
         <span
           className={clsx(
-            'text-right tabular-nums pt-1',
+            'text-right tabular-nums',
             isActive ? 'text-fg-1' : 'text-fg-2',
           )}
         >
@@ -931,22 +934,18 @@ function ConsoleRow({
   );
 }
 
-function consoleLevelTone(level: ConsoleLevel): { text: string; dot: string } {
+function consoleLevelTone(level: ConsoleLevel): { text: string } {
   switch (level) {
     case 'error':
-      return {
-        text: 'text-[color:var(--color-error)]',
-        dot: 'bg-[color:var(--color-error)]',
-      };
+      return { text: 'text-[color:var(--color-error)]' };
     case 'warn':
-      return { text: 'text-accent', dot: 'bg-accent' };
-    case 'info':
-      return { text: 'text-fg-0', dot: 'bg-fg-1' };
+      return { text: 'text-accent' };
     case 'debug':
-      return { text: 'text-fg-2', dot: 'bg-fg-2' };
+      return { text: 'text-fg-2' };
+    case 'info':
     case 'log':
     default:
-      return { text: 'text-fg-1', dot: 'bg-fg-2' };
+      return { text: 'text-fg-1' };
   }
 }
 

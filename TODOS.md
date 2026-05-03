@@ -109,3 +109,21 @@ Deferred work. Not in v1 scope. Each entry has enough context that someone (incl
 **Depends on / blocked by:** v1 shipping. The network panel is in v1; the masking option is the v1.5 follow-up.
 
 **Signals to prioritize:** A user reports a leaked token in a replay URL, OR the builder ships Crashpad on an app that uses query-string auth.
+
+---
+
+## [v1.5] `maskConsole` config option for the console panel
+
+**What:** Add a `CrashpadConfig.maskConsole?: 'off' | 'errors-only' | (level, args) => unknown[] | null` option to control whether and how `console.*` arguments are captured into the replay payload.
+
+**Why:** The console panel records all `console.log`/`info`/`warn`/`error`/`debug` calls verbatim through the SDK's depth-and-size limited serializer. Apps that print user data — emails, IDs, request/response bodies, tokens — to the console will leak that data into the replay payload. v1 ships with a JSDoc warning on `ConsoleSessionEvent.args` and points users at this option as the principled fix. Parallel to `maskUrls`.
+
+**Pros:** Closes the console-PII vector. `'errors-only'` is a sensible safer default for prod (debugging value is highest for errors). Custom redactor function gives users an escape hatch.
+
+**Cons:** `'errors-only'` reduces the panel's signal in cases where the bug is preceded by `console.log` breadcrumbs — the cost of safety. Custom-function path complicates the SDK's never-throw guarantee — the redactor must run inside `safe()` and fall back to dropping the entry on throw.
+
+**Context:** Default is `'off'` (current behavior, JSDoc warns). Once a real user hits the bug or asks for it, ship `'errors-only'` and consider it as the new default. The redactor should run inside `safe()` in `core/console.ts:wrapLevel`, BEFORE the `serializeArgs` call. Returning `null` skips the entry entirely.
+
+**Depends on / blocked by:** v1 shipping. Console panel landed in v1; the masking option is the v1.5 follow-up.
+
+**Signals to prioritize:** A user reports leaked PII in a console capture, OR the builder ships Crashpad on an app that logs user data to the console.
