@@ -184,6 +184,22 @@ export interface EventMetadata {
   };
 }
 
+// Resolution is best-effort per-frame: when a map is missing or the position
+// isn't mapped, the resolved fields are null but the raw fields are filled.
+export interface ResolvedFrame {
+  function: string | null;
+  file: string | null;
+  line: number | null;
+  column: number | null;
+  rawFunction: string | null;
+  rawFile: string | null;
+  rawLine: number | null;
+  rawColumn: number | null;
+  preContext?: string[];
+  contextLine?: string;
+  postContext?: string[];
+}
+
 // events and replays are linked by correlation_id, NOT a foreign key. The SDK
 // stamps the same UUID on both payloads; the server joins on read. This avoids
 // the split-payload race where the replay arrives before (or after) the event.
@@ -204,6 +220,7 @@ export const events = pgTable(
     stackTrace: text('stack_trace'),
     release: text('release'),
     environment: text('environment'),
+    resolvedFrames: jsonb('resolved_frames').$type<ResolvedFrame[]>(),
     metadata: jsonb('metadata').$type<EventMetadata>().notNull(),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()

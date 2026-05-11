@@ -127,3 +127,63 @@ Deferred work. Not in v1 scope. Each entry has enough context that someone (incl
 **Depends on / blocked by:** v1 shipping. Console panel landed in v1; the masking option is the v1.5 follow-up.
 
 **Signals to prioritize:** A user reports leaked PII in a console capture, OR the builder ships Crashpad on an app that logs user data to the console.
+
+---
+
+## [v1.5] Source-map resolver — skip pseudo-source frames
+
+**What:** In `apps/api/src/services/sourcemap-resolver.ts`, short-circuit the `findSourceMap` lookup when `bundleName` is a pseudo-source like `<anonymous>`, `eval`, native frames, or anything not ending in `.js`/`.mjs`/`.cjs`.
+
+**Why:** Every browser stack has at least one anonymous or eval frame. Today we issue a DB SELECT per such frame that returns nothing. Wasted roundtrips on the ingest hot path.
+
+**Context:** Add an `isLookupable(bundleName)` guard before the cache check. ~8 LOC. Flagged in the 2026-05-11 senior code review of the sourcemap pipeline as "I3 — not critical but cheap."
+
+**Signals to prioritize:** Profiling shows ingest latency dominated by source-map DB queries, OR a typical 10-frame stack produces 4+ no-op lookups.
+
+---
+
+## [v1.5] Source-map resolver — prefer raw function name when `pos.name` is weak
+
+**What:** In `resolveStack`, change `function: pos.name ?? raw.rawFunction` to a smarter heuristic. `pos.name` from `originalPositionFor` is the original *identifier token* at the position, often a variable like `data` or `result` rather than the enclosing function name.
+
+**Why:** Today a useful minified function name from V8 (`UserForm.handleSubmit`) can get replaced by a less useful original token. Better to prefer `rawFunction` when both are populated, since `rawFunction` reflects the actual call frame.
+
+**Context:** First-pass heuristic: keep `pos.name` only when `rawFunction` looks minified (single letter, starts with `_0x`, etc.). Flagged in the senior review as "I4."
+
+**Signals to prioritize:** Dogfooding shows resolved function names that are worse than the minified originals.
+
+---
+
+## [v1.5] Source-map resolver — project SELECT to only `content`
+
+**What:** In `findSourceMap` (`apps/api/src/controllers/sourcemaps.ts`), drop `SELECT *` and select only the `content` column.
+
+**Why:** Source map content can be up to 20MB. Pulling the full row across the wire when the resolver only consumes `content` doubles per-call allocation on the API server.
+
+**Context:** Switch to `db.select({ content: sourceMaps.content })` and adjust the return type. ~5 LOC. Flagged as "I5 — measurable only with profiling."
+
+**Signals to prioritize:** API server memory pressure correlates with ingest throughput, OR profiling shows source-map row materialization as a hot path.
+
+---
+
+## [v1.5] CLI upload — retry with exponential backoff
+
+**What:** Wrap `uploadMap` in `packages/sdk/cli/upload.mjs` with 3-try exponential backoff for 5xx responses and network errors. Skip retry on 4xx.
+
+**Why:** A single transient 502 or DNS hiccup fails the map upload permanently. In CI this can cost an entire release worth of maps for a 5-second blip. The SDK's transport already does this pattern (one 500ms retry on 5xx in `packages/sdk/src/core/transport.ts`); the CLI should match.
+
+**Context:** ~15 LOC: wrap fetch in a retry helper, sleep `500 * attempt` between attempts. Flagged as "I6 — useful for flaky CI."
+
+**Signals to prioritize:** First CI run that fails on a transient network error, OR builder hits a 502 mid-deploy.
+
+---
+
+## [v1.5] `ResolvedFrame.schemaVersion` for forward-compat
+
+**What:** Add a `v: 1` literal field to the `ResolvedFrame` interface so future shape changes can be detected at read time.
+
+**Why:** v1 resolves stacks at ingest and persists the result. If we ever fix a bug in `normalizeSource` or change the shape, old events render with the old resolution forever — unless we can detect version and either re-resolve or render through a compat path. Pairs naturally with the deferred-resolution v1.5 item above.
+
+**Context:** One line in `db/schema.ts`, one line in the resolver. Web renderer doesn't need to read it yet. Flagged as "S1 — cheap forward insurance."
+
+**Signals to prioritize:** Any change to resolver logic that would alter the shape of an existing field, OR the first time we want to backfill resolution retroactively.

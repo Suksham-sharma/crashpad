@@ -19,7 +19,9 @@
     "better-auth": "^1.6.2",
     "drizzle-orm": "^0.45.2",
     "elysia": "^1.1.0",
-    "postgres": "^3.4.9"
+    "postgres": "^3.4.9",
+    "source-map-js": "^1.2.1",
+    "stacktrace-parser": "^0.1.11"
   },
   "devDependencies": {
     "@types/pg": "^8.20.0",
