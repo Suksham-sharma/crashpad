@@ -17,8 +17,10 @@ import {
   type ConsoleSessionEvent,
   type EventMetadata,
   type IssueDetail,
+  type IssueEvent,
   type IssueStatus,
   type NetworkSessionEvent,
+  type ResolvedFrame,
 } from '@/queries/issues';
 
 type TabId = 'dom' | 'stack' | 'network' | 'console';
@@ -183,10 +185,7 @@ function StatusButton({
 
 function IssueTitle({ detail }: { detail: IssueDetail }) {
   const { issue, latestEvent } = detail;
-  const topFrame = useMemo(
-    () => parseTopFrame(latestEvent?.stackTrace ?? null),
-    [latestEvent?.stackTrace],
-  );
+  const topFrame = useMemo(() => pickTopFrame(latestEvent), [latestEvent]);
   return (
     <section className="px-6 pt-5 pb-4 shrink-0">
       <h1 className="font-mono text-xl font-bold text-accent leading-tight break-words">
@@ -272,8 +271,13 @@ function ReplayPane({
 }
 
 function StackTracePanel({ detail }: { detail: IssueDetail }) {
-  const stack = detail.latestEvent?.stackTrace ?? null;
-  const frames = useMemo(() => parseStack(stack), [stack]);
+  const event = detail.latestEvent ?? null;
+  const resolved = event?.resolvedFrames ?? null;
+  const stack = event?.stackTrace ?? null;
+  const rawFrames = useMemo(() => parseStack(stack), [stack]);
+
+  const hasResolved = resolved !== null && resolved.length > 0;
+  const isEmpty = !hasResolved && rawFrames.length === 0;
 
   return (
     <div className="h-full flex flex-col">
@@ -282,17 +286,23 @@ function StackTracePanel({ detail }: { detail: IssueDetail }) {
           Stack trace
         </span>
         <span className="font-mono text-[10px] uppercase tracking-widest text-fg-2">
-          main thread
+          {hasResolved ? 'resolved' : 'main thread'}
         </span>
       </div>
 
-      {frames.length === 0 ? (
+      {isEmpty ? (
         <div className="flex-1 p-4 font-mono text-xs text-fg-2 whitespace-pre-wrap break-words overflow-auto">
           {stack ?? 'No stack trace captured.'}
         </div>
+      ) : hasResolved ? (
+        <div className="flex-1 overflow-auto">
+          {resolved.map((f, i) => (
+            <ResolvedFrameRow key={i} frame={f} isActive={i === 0} />
+          ))}
+        </div>
       ) : (
         <div className="flex-1 overflow-auto">
-          {frames.map((f, i) => (
+          {rawFrames.map((f, i) => (
             <StackFrame key={i} frame={f} isActive={i === 0} />
           ))}
         </div>
@@ -323,6 +333,109 @@ function StackFrame({ frame, isActive }: { frame: Frame; isActive: boolean }) {
           {shortFile}:{frame.line}
         </span>
       </div>
+    </div>
+  );
+}
+
+function ResolvedFrameRow({
+  frame,
+  isActive,
+}: {
+  frame: ResolvedFrame;
+  isActive: boolean;
+}) {
+  const isResolved = frame.file !== null && frame.line !== null;
+  const fn = frame.function ?? frame.rawFunction ?? '<anonymous>';
+  const displayFile = isResolved
+    ? cleanPath(frame.file!)
+    : shortenFile(frame.rawFile ?? '');
+  const line = frame.line ?? frame.rawLine;
+  const col = frame.column ?? frame.rawColumn;
+  const showContext =
+    isActive && isResolved && frame.contextLine !== undefined;
+
+  return (
+    <div
+      className={clsx(
+        'border-b border-border-ghost',
+        isActive && 'bg-accent-muted border-l-2 border-l-accent',
+      )}
+    >
+      <div className="px-4 py-3">
+        <div className="flex items-baseline justify-between gap-3">
+          <div className="min-w-0">
+            <span className="font-mono text-xs text-fg-2">at </span>
+            <span className="font-mono text-xs text-fg-0 font-medium">
+              {fn}
+            </span>
+            {!isResolved && (
+              <span className="ml-2 font-mono text-[10px] uppercase tracking-widest text-fg-2">
+                raw
+              </span>
+            )}
+          </div>
+          <span className="font-mono text-[11px] text-fg-2 truncate max-w-[280px]">
+            {displayFile}
+            {line != null && `:${line}`}
+            {col != null && `:${col}`}
+          </span>
+        </div>
+      </div>
+      {showContext && line != null && (
+        <ContextBlock
+          pre={frame.preContext ?? []}
+          line={frame.contextLine!}
+          post={frame.postContext ?? []}
+          startLine={line - (frame.preContext?.length ?? 0)}
+          errorLine={line}
+        />
+      )}
+    </div>
+  );
+}
+
+function ContextBlock({
+  pre,
+  line,
+  post,
+  startLine,
+  errorLine,
+}: {
+  pre: string[];
+  line: string;
+  post: string[];
+  startLine: number;
+  errorLine: number;
+}) {
+  const all = [...pre, line, ...post];
+  return (
+    <div className="border-t border-border-ghost overflow-x-auto bg-bg-1">
+      <pre className="font-mono text-[11px] leading-relaxed py-2">
+        {all.map((text, i) => {
+          const lineNo = startLine + i;
+          const isErr = lineNo === errorLine;
+          return (
+            <div key={i} className={clsx('flex', isErr && 'bg-accent-muted')}>
+              <span
+                className={clsx(
+                  'pl-4 pr-3 select-none text-right tabular-nums w-14 shrink-0',
+                  isErr ? 'text-accent' : 'text-fg-2',
+                )}
+              >
+                {lineNo}
+              </span>
+              <span
+                className={clsx(
+                  'pr-4 whitespace-pre',
+                  isErr ? 'text-fg-0' : 'text-fg-1',
+                )}
+              >
+                {text || ' '}
+              </span>
+            </div>
+          );
+        })}
+      </pre>
     </div>
   );
 }
@@ -1057,6 +1170,30 @@ function parseStack(stack: string | null): Frame[] {
 
 function parseTopFrame(stack: string | null): Frame | null {
   return parseStack(stack)[0] ?? null;
+}
+
+function pickTopFrame(
+  event: IssueEvent | null | undefined,
+): { file: string; line: number } | null {
+  if (!event) return null;
+  const r = event.resolvedFrames?.[0];
+  if (r) {
+    const file = r.file ?? r.rawFile;
+    const line = r.line ?? r.rawLine;
+    if (file && line != null) {
+      return {
+        file: r.file !== null ? cleanPath(file) : shortenFile(file),
+        line,
+      };
+    }
+  }
+  const f = parseTopFrame(event.stackTrace);
+  if (!f) return null;
+  return { file: shortenFile(f.file), line: f.line };
+}
+
+function cleanPath(file: string): string {
+  return file.replace(/^\.\/+/, '').replace(/^\/+/, '');
 }
 
 function shortenFile(file: string): string {
