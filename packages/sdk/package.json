@@ -12,6 +12,14 @@
       "import": "./src/index.ts"
     }
   },
+  "bin": {
+    "crashpad": "./cli/upload.mjs"
+  },
+  "files": [
+    "src",
+    "cli",
+    "dist"
+  ],
   "scripts": {
     "build": "bun build src/index.ts --target=browser --outdir=dist --minify",
     "test": "bun test",

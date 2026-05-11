@@ -6,8 +6,10 @@ import {
   type EventMetadata,
   type Event,
   type Issue,
+  type ResolvedFrame,
 } from '../db/schema';
 import { computeFingerprint } from './fingerprint';
+import { resolveStack } from '../services/sourcemap-resolver';
 
 export interface IngestEventInput {
   correlationId: string;
@@ -40,6 +42,25 @@ export async function ingestEvent(
   const fingerprint = computeFingerprint(input);
   const title = buildTitle(input.errorType, input.errorMessage);
 
+  // Best-effort: never let resolution failures block ingest.
+  let resolvedFrames: ResolvedFrame[] | null = null;
+  if (input.release && input.stackTrace) {
+    try {
+      resolvedFrames = await resolveStack(
+        input.stackTrace,
+        projectId,
+        input.release,
+      );
+    } catch (err) {
+      console.warn('[ingest] resolveStack threw', {
+        projectId,
+        release: input.release,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      resolvedFrames = null;
+    }
+  }
+
   return db.transaction(async (tx) => {
     const [issue] = await tx
       .insert(issues)
@@ -65,6 +86,7 @@ export async function ingestEvent(
         stackTrace: input.stackTrace ?? null,
         release: input.release ?? null,
         environment: input.environment ?? null,
+        resolvedFrames,
         metadata: input.metadata,
       })
       .returning({ id: events.id });
