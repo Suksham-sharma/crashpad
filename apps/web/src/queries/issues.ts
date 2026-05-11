@@ -30,6 +30,20 @@ export type EventMetadata = {
   };
 };
 
+export type ResolvedFrame = {
+  function: string | null;
+  file: string | null;
+  line: number | null;
+  column: number | null;
+  rawFunction: string | null;
+  rawFile: string | null;
+  rawLine: number | null;
+  rawColumn: number | null;
+  preContext?: string[];
+  contextLine?: string;
+  postContext?: string[];
+};
+
 export type IssueEvent = {
   id: string;
   projectId: string;
@@ -41,6 +55,7 @@ export type IssueEvent = {
   stackTrace: string | null;
   release: string | null;
   environment: string | null;
+  resolvedFrames: ResolvedFrame[] | null;
   metadata: EventMetadata;
   createdAt: string;
 };
