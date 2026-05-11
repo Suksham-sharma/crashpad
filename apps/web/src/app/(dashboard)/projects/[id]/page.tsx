@@ -9,7 +9,9 @@ import {
   CircleAlert,
   Copy,
   Play,
+  Search,
   Settings,
+  X,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -20,6 +22,7 @@ import {
   useProjectIssues,
   type Issue,
   type IssueStatus,
+  type IssueTimeWindow,
 } from '@/queries/issues';
 import { useProject, type Project } from '@/queries/projects';
 
@@ -28,10 +31,21 @@ export default function ProjectPage() {
   const projectQuery = useProject(id);
   const [status, setStatus] = useState<IssueStatus>('open');
   const [listening, setListening] = useState(false);
+  const [searchInput, setSearchInput] = useState('');
+  const [debouncedQ, setDebouncedQ] = useState('');
+  const [since, setSince] = useState<IssueTimeWindow | undefined>(undefined);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQ(searchInput), 250);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
   const issuesQuery = useProjectIssues(id, {
     status,
     sort: 'last_seen',
     polling: listening,
+    q: debouncedQ,
+    since,
   });
 
   if (projectQuery.isPending) return <PageLoading />;
@@ -50,6 +64,8 @@ export default function ProjectPage() {
   const project = projectQuery.data;
   if (!project) return <PageError message="Project not found." />;
 
+  const filtersDirty = debouncedQ.length > 0 || since !== undefined;
+
   return (
     <main>
       <ProjectHeader project={project} />
@@ -57,6 +73,11 @@ export default function ProjectPage() {
         project={project}
         status={status}
         onStatus={setStatus}
+        searchInput={searchInput}
+        onSearchInput={setSearchInput}
+        since={since}
+        onSince={setSince}
+        filtersDirty={filtersDirty}
         issuesQuery={issuesQuery}
         listening={listening}
         onStartListening={() => setListening(true)}
@@ -69,6 +90,11 @@ function Body({
   project,
   status,
   onStatus,
+  searchInput,
+  onSearchInput,
+  since,
+  onSince,
+  filtersDirty,
   issuesQuery,
   listening,
   onStartListening,
@@ -76,11 +102,15 @@ function Body({
   project: Project;
   status: IssueStatus;
   onStatus: (s: IssueStatus) => void;
+  searchInput: string;
+  onSearchInput: (s: string) => void;
+  since: IssueTimeWindow | undefined;
+  onSince: (s: IssueTimeWindow | undefined) => void;
+  filtersDirty: boolean;
   issuesQuery: ReturnType<typeof useProjectIssues>;
   listening: boolean;
   onStartListening: () => void;
 }) {
-  if (issuesQuery.isPending) return <IssuesSkeleton />;
   if (issuesQuery.isError) {
     return (
       <PageError
@@ -92,9 +122,20 @@ function Body({
     );
   }
 
+  // First-ever load: no cached data yet. Full-page skeleton, no FilterBar.
+  if (!issuesQuery.data) {
+    return <IssuesSkeleton />;
+  }
+
   const { issues, total } = issuesQuery.data;
 
-  if (status === 'open' && total === 0) {
+  // Onboarding state — only when we know for sure there's nothing.
+  if (
+    status === 'open' &&
+    total === 0 &&
+    !filtersDirty &&
+    !issuesQuery.isFetching
+  ) {
     return (
       <WaitingState
         project={project}
@@ -105,20 +146,41 @@ function Body({
   }
 
   return (
-    <IssueList
-      projectId={project.id}
-      status={status}
-      onStatus={onStatus}
-      issues={issues}
-      total={total}
-    />
+    <section>
+      <FilterBar
+        status={status}
+        onStatus={onStatus}
+        searchInput={searchInput}
+        onSearchInput={onSearchInput}
+        since={since}
+        onSince={onSince}
+        total={total}
+        shown={issues.length}
+      />
+      {issuesQuery.isFetching ? (
+        <IssuesSkeleton />
+      ) : issues.length === 0 ? (
+        <EmptyForStatus
+          status={status}
+          searchActive={filtersDirty}
+        />
+      ) : (
+        <div className="max-w-screen-2xl mx-auto pt-4">
+          <ul>
+            {issues.map((issue, i) => (
+              <IssueRow key={issue.id} issue={issue} zebra={i % 2 === 1} />
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
   );
 }
 
 function ProjectHeader({ project }: { project: Project }) {
   const { copied, copy } = useCopy();
   return (
-    <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between gap-6 border-b border-border-ghost">
+    <div className="max-w-screen-2xl mx-auto px-6 h-16 flex items-center justify-between gap-6 border-b border-border-ghost">
       <div className="flex items-center gap-3 min-w-0">
         <Link
           href="/dashboard"
@@ -591,121 +653,143 @@ function TroubleshootItem({ children }: { children: React.ReactNode }) {
   );
 }
 
-function IssueList({
-  status,
-  onStatus,
-  issues,
-  total,
-}: {
-  projectId: string;
-  status: IssueStatus;
-  onStatus: (s: IssueStatus) => void;
-  issues: Issue[];
-  total: number;
-}) {
-  return (
-    <section>
-      <FilterBar
-        status={status}
-        onStatus={onStatus}
-        total={total}
-        shown={issues.length}
-      />
-      {issues.length === 0 ? (
-        <EmptyForStatus status={status} />
-      ) : (
-        <div className="max-w-7xl mx-auto pt-4">
-          <ul>
-            {issues.map((issue, i) => (
-              <IssueRow key={issue.id} issue={issue} zebra={i % 2 === 1} />
-            ))}
-          </ul>
-        </div>
-      )}
-    </section>
-  );
-}
-
 const STATUS_TABS: { value: IssueStatus; label: string }[] = [
   { value: 'open', label: 'Open' },
   { value: 'resolved', label: 'Resolved' },
   { value: 'ignored', label: 'Ignored' },
 ];
 
+const TIME_TABS: { value: IssueTimeWindow | undefined; label: string }[] = [
+  { value: '24h', label: '24h' },
+  { value: '7d', label: '7d' },
+  { value: '30d', label: '30d' },
+  { value: undefined, label: 'All' },
+];
+
 function FilterBar({
   status,
   onStatus,
+  searchInput,
+  onSearchInput,
+  since,
+  onSince,
   total,
   shown,
 }: {
   status: IssueStatus;
   onStatus: (s: IssueStatus) => void;
+  searchInput: string;
+  onSearchInput: (s: string) => void;
+  since: IssueTimeWindow | undefined;
+  onSince: (s: IssueTimeWindow | undefined) => void;
   total: number;
   shown: number;
 }) {
   return (
     <div className="border-b border-border-ghost">
-      <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between gap-6">
-        <div className="flex items-center gap-2">
-          {STATUS_TABS.map((tab) => {
-            const active = tab.value === status;
-            const dotClass =
-              tab.value === 'open'
-                ? 'bg-status-open'
-                : tab.value === 'resolved'
-                  ? 'bg-status-resolved'
-                  : 'bg-status-ignored';
-            return (
+      <div className="max-w-screen-2xl mx-auto px-6 py-3 flex flex-col gap-3">
+        <div className="flex items-center gap-3">
+          <div className="group relative flex-1">
+            <Search
+              size={14}
+              strokeWidth={1.75}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-2 group-focus-within:text-accent transition-colors duration-100 pointer-events-none"
+              aria-hidden
+            />
+            <input
+              type="text"
+              value={searchInput}
+              onChange={(e) => onSearchInput(e.target.value)}
+              placeholder="Search by title…"
+              className="w-full h-10 pl-9 pr-9 bg-bg-1 border border-bg-3 font-mono text-sm text-fg-0 placeholder:text-fg-2 hover:border-bg-4 focus:outline-none focus:border-accent focus:bg-bg-0 transition-colors duration-100"
+            />
+            {searchInput && (
               <button
-                key={tab.value}
                 type="button"
-                onClick={() => onStatus(tab.value)}
-                className={clsx(
-                  'h-10 inline-flex items-center gap-2.5 px-4 font-mono text-base uppercase tracking-widest transition-colors duration-100',
-                  active
-                    ? 'bg-accent-muted text-fg-0'
-                    : 'text-fg-2 hover:text-fg-1 hover:bg-bg-1',
-                )}
+                onClick={() => onSearchInput('')}
+                aria-label="Clear search"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-fg-2 hover:text-fg-0 transition-colors duration-100"
               >
-                <span
-                  className={clsx(
-                    'w-1.5 h-1.5 shrink-0',
-                    active ? dotClass : 'bg-fg-2',
-                  )}
-                  aria-hidden
-                />
-                <span>{tab.label}</span>
+                <X size={13} strokeWidth={1.75} />
               </button>
-            );
-          })}
+            )}
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {TIME_TABS.map((tab) => {
+              const active = tab.value === since;
+              return (
+                <button
+                  key={tab.label}
+                  type="button"
+                  onClick={() => onSince(tab.value)}
+                  className={clsx(
+                    'h-10 inline-flex items-center px-4 font-mono text-sm uppercase tracking-widest transition-colors duration-100',
+                    active
+                      ? 'bg-accent-muted text-fg-0'
+                      : 'text-fg-2 hover:text-fg-1 hover:bg-bg-1',
+                  )}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
-        {total > 0 && (
-          <span className="font-mono text-xs uppercase tracking-widest text-fg-2 tabular-nums">
-            {shown === total
-              ? `${total} ${total === 1 ? 'issue' : 'issues'}`
-              : `${shown} of ${total}`}
-          </span>
-        )}
+
+        <div className="flex items-center justify-between gap-6">
+          <div className="flex items-center gap-2">
+            {STATUS_TABS.map((tab) => {
+              const active = tab.value === status;
+              const dotClass =
+                tab.value === 'open'
+                  ? 'bg-status-open'
+                  : tab.value === 'resolved'
+                    ? 'bg-status-resolved'
+                    : 'bg-status-ignored';
+              return (
+                <button
+                  key={tab.value}
+                  type="button"
+                  onClick={() => onStatus(tab.value)}
+                  className={clsx(
+                    'h-10 inline-flex items-center gap-2.5 px-4 font-mono text-sm uppercase tracking-widest transition-colors duration-100',
+                    active
+                      ? 'bg-accent-muted text-fg-0'
+                      : 'text-fg-2 hover:text-fg-1 hover:bg-bg-1',
+                  )}
+                >
+                  <span
+                    className={clsx(
+                      'w-1.5 h-1.5 shrink-0',
+                      active ? dotClass : 'bg-fg-2',
+                    )}
+                    aria-hidden
+                  />
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
+          </div>
+          {total > 0 && (
+            <span className="font-mono text-xs uppercase tracking-widest text-fg-2 tabular-nums">
+              {shown === total
+                ? `${total} ${total === 1 ? 'issue' : 'issues'}`
+                : `${shown} of ${total}`}
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
 function IssueRow({ issue, zebra }: { issue: Issue; zebra: boolean }) {
-  const stripeClass =
-    issue.status === 'open'
-      ? 'bg-accent'
-      : issue.status === 'resolved'
-        ? 'bg-status-resolved'
-        : 'bg-status-ignored';
-
   return (
     <li className={clsx('group', zebra && 'bg-bg-1')}>
       <Link
         href={`/issues/${issue.id}`}
         className="flex items-stretch hover:bg-bg-2 transition-colors duration-100"
       >
-        <span className={clsx('w-1 shrink-0', stripeClass)} aria-hidden />
         <div className="flex-1 min-w-0 px-6 h-14 flex items-center gap-6">
           <div className="flex-1 min-w-0">
             <div className="truncate font-mono font-bold text-base leading-tight text-fg-0 group-hover:text-accent transition-colors duration-100">
@@ -734,13 +818,22 @@ function IssueRow({ issue, zebra }: { issue: Issue; zebra: boolean }) {
   );
 }
 
-function EmptyForStatus({ status }: { status: IssueStatus }) {
-  const label =
-    status === 'resolved'
+function EmptyForStatus({
+  status,
+  searchActive,
+}: {
+  status: IssueStatus;
+  searchActive: boolean;
+}) {
+  const label = searchActive
+    ? 'No issues match your filters.'
+    : status === 'resolved'
       ? 'No resolved issues yet.'
-      : 'No ignored issues yet.';
+      : status === 'ignored'
+        ? 'No ignored issues yet.'
+        : 'No open issues in this window.';
   return (
-    <div className="max-w-7xl mx-auto px-6 py-20 text-center">
+    <div className="max-w-screen-2xl mx-auto px-6 py-20 text-center">
       <p className="font-body text-sm text-fg-1">{label}</p>
     </div>
   );
@@ -750,13 +843,13 @@ function IssuesSkeleton() {
   return (
     <section>
       <div className="bg-bg-1 border-b border-border-ghost">
-        <div className="max-w-7xl mx-auto px-6 h-12 flex items-center gap-2">
+        <div className="max-w-screen-2xl mx-auto px-6 h-12 flex items-center gap-2">
           {Array.from({ length: 3 }).map((_, i) => (
             <div key={i} className="h-8 w-20 bg-bg-3 animate-pulse" />
           ))}
         </div>
       </div>
-      <ul className="max-w-7xl mx-auto">
+      <ul className="max-w-screen-2xl mx-auto">
         {Array.from({ length: 4 }).map((_, i) => (
           <li
             key={i}

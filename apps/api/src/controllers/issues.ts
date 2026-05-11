@@ -1,4 +1,4 @@
-import { and, eq, desc, sql } from 'drizzle-orm';
+import { and, eq, desc, gte, ilike, sql } from 'drizzle-orm';
 import { db } from '../db';
 import {
   issues,
@@ -11,11 +11,15 @@ import {
   type Replay,
 } from '../db/schema';
 
+export type IssueTimeWindow = '24h' | '7d' | '30d';
+
 export interface ListIssuesOpts {
   page: number;
   limit: number;
   status?: IssueStatus;
   sort: 'last_seen' | 'event_count' | 'first_seen';
+  q?: string;
+  since?: IssueTimeWindow;
 }
 
 export interface ListIssuesResult {
@@ -25,15 +29,33 @@ export interface ListIssuesResult {
   limit: number;
 }
 
+const SINCE_INTERVAL: Record<IssueTimeWindow, string> = {
+  '24h': '1 day',
+  '7d': '7 days',
+  '30d': '30 days',
+};
+
+function escapeLike(s: string): string {
+  return s.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
 export async function listIssuesForProject(
   projectId: string,
   opts: ListIssuesOpts,
 ): Promise<ListIssuesResult> {
-  const { page, limit, status, sort } = opts;
+  const { page, limit, status, sort, q, since } = opts;
   const offset = (page - 1) * limit;
 
   const conditions = [eq(issues.projectId, projectId)];
   if (status) conditions.push(eq(issues.status, status));
+  if (q && q.trim()) {
+    conditions.push(ilike(issues.title, `%${escapeLike(q.trim())}%`));
+  }
+  if (since) {
+    conditions.push(
+      gte(issues.lastSeen, sql`now() - ${SINCE_INTERVAL[since]}::interval`),
+    );
+  }
   const where = and(...conditions);
 
   const sortCol = {

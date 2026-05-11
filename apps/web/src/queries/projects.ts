@@ -62,3 +62,47 @@ export function useDeleteProject() {
     },
   });
 }
+
+export function useUpdateProject(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { name: string }) =>
+      api.patch<{ project: Project }>(`/projects/${id}`, input),
+    onSuccess: ({ project }) => {
+      qc.setQueryData<{ project: Project }>(projectKeys.detail(id), {
+        project,
+      });
+      qc.setQueryData<{ projects: Project[] }>(projectKeys.list(), (prev) =>
+        prev
+          ? {
+              projects: prev.projects.map((p) =>
+                p.id === project.id ? project : p,
+              ),
+            }
+          : prev,
+      );
+    },
+  });
+}
+
+export function useRegenerateApiKey(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      api.post<{ project: Project }>(`/projects/${id}/regenerate-key`, {}),
+    onSuccess: ({ project }) => {
+      qc.setQueryData<{ project: Project }>(projectKeys.detail(id), {
+        project,
+      });
+      qc.setQueryData<{ projects: Project[] }>(projectKeys.list(), (prev) =>
+        prev
+          ? {
+              projects: prev.projects.map((p) =>
+                p.id === project.id ? project : p,
+              ),
+            }
+          : prev,
+      );
+    },
+  });
+}
