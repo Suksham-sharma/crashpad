@@ -21,6 +21,10 @@ export const listIssuesQuery = t.Object({
       t.Literal('first_seen'),
     ]),
   ),
+  q: t.Optional(t.String({ maxLength: 200 })),
+  since: t.Optional(
+    t.Union([t.Literal('24h'), t.Literal('7d'), t.Literal('30d')]),
+  ),
 });
 
 export const updateIssueBody = t.Object({

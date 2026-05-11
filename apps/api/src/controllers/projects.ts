@@ -50,6 +50,32 @@ export async function deleteProjectForUser(
   return deleted.length > 0;
 }
 
+export async function updateProjectForUser(
+  id: string,
+  userId: string,
+  patch: { name: string },
+): Promise<Project | null> {
+  const [updated] = await db
+    .update(projects)
+    .set({ name: patch.name, updatedAt: new Date() })
+    .where(and(eq(projects.id, id), eq(projects.userId, userId)))
+    .returning();
+  return updated ?? null;
+}
+
+export async function regenerateApiKeyForUser(
+  id: string,
+  userId: string,
+): Promise<Project | null> {
+  const apiKey = generateApiKey();
+  const [updated] = await db
+    .update(projects)
+    .set({ apiKey, updatedAt: new Date() })
+    .where(and(eq(projects.id, id), eq(projects.userId, userId)))
+    .returning();
+  return updated ?? null;
+}
+
 export async function findProjectByApiKey(
   apiKey: string,
 ): Promise<Project | null> {

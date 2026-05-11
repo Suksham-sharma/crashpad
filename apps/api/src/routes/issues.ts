@@ -29,6 +29,8 @@ export const issueRoutes = new Elysia({ prefix: '/api/v1' })
         limit: query.limit ?? 25,
         status: query.status,
         sort: query.sort ?? 'last_seen',
+        q: query.q,
+        since: query.since,
       });
     },
     { params: projectIssuesParams, query: listIssuesQuery, auth: true },

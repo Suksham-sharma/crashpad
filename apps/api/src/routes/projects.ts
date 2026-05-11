@@ -5,8 +5,14 @@ import {
   deleteProjectForUser,
   getProjectForUser,
   listProjectsForUser,
+  regenerateApiKeyForUser,
+  updateProjectForUser,
 } from '../controllers/projects';
-import { createProjectBody, projectIdParams } from '../schemas/projects';
+import {
+  createProjectBody,
+  projectIdParams,
+  updateProjectBody,
+} from '../schemas/projects';
 
 export const projectRoutes = new Elysia({ prefix: '/api/v1/projects' })
   .use(authGuard)
@@ -35,6 +41,34 @@ export const projectRoutes = new Elysia({ prefix: '/api/v1/projects' })
         return { error: 'not_found' };
       }
       return { project };
+    },
+    { params: projectIdParams, auth: true },
+  )
+  .patch(
+    '/:id',
+    async ({ user, params, body, set }) => {
+      const updated = await updateProjectForUser(params.id, user.id, body);
+      if (!updated) {
+        set.status = 404;
+        return { error: 'not_found' };
+      }
+      return { project: updated };
+    },
+    {
+      params: projectIdParams,
+      body: updateProjectBody,
+      auth: true,
+    },
+  )
+  .post(
+    '/:id/regenerate-key',
+    async ({ user, params, set }) => {
+      const updated = await regenerateApiKeyForUser(params.id, user.id);
+      if (!updated) {
+        set.status = 404;
+        return { error: 'not_found' };
+      }
+      return { project: updated };
     },
     { params: projectIdParams, auth: true },
   )

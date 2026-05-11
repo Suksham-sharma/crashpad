@@ -7,3 +7,7 @@ export const projectIdParams = t.Object({
 export const createProjectBody = t.Object({
   name: t.String({ minLength: 1, maxLength: 100 }),
 });
+
+export const updateProjectBody = t.Object({
+  name: t.String({ minLength: 1, maxLength: 100 }),
+});

@@ -1,10 +1,16 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import { api } from '@/lib/api';
 
 export type IssueStatus = 'open' | 'resolved' | 'ignored';
 export type IssueSort = 'last_seen' | 'event_count' | 'first_seen';
+export type IssueTimeWindow = '24h' | '7d' | '30d';
 
 export type Issue = {
   id: string;
@@ -119,6 +125,8 @@ export type ListIssuesOpts = {
   sort?: IssueSort;
   page?: number;
   limit?: number;
+  q?: string;
+  since?: IssueTimeWindow;
 };
 
 export function useProjectIssues(
@@ -131,6 +139,8 @@ export function useProjectIssues(
   if (queryOpts.sort) params.set('sort', queryOpts.sort);
   if (queryOpts.page) params.set('page', String(queryOpts.page));
   if (queryOpts.limit) params.set('limit', String(queryOpts.limit));
+  if (queryOpts.q && queryOpts.q.trim()) params.set('q', queryOpts.q.trim());
+  if (queryOpts.since) params.set('since', queryOpts.since);
   const qs = params.toString();
 
   return useQuery({
@@ -142,6 +152,7 @@ export function useProjectIssues(
     enabled: Boolean(projectId),
     refetchInterval: polling ? 10_000 : false,
     refetchIntervalInBackground: false,
+    placeholderData: keepPreviousData,
   });
 }
 

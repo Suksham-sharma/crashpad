@@ -9,6 +9,7 @@ import {
   DockedPlayer,
   type DockedPlayerHandle,
 } from '@/components/DockedPlayer';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { ApiError } from '@/lib/api';
 import {
   useIssue,
@@ -85,10 +86,44 @@ function IssueHeader({ detail }: { detail: IssueDetail }) {
   const router = useRouter();
   const { issue } = detail;
   const mutation = useUpdateIssueStatus(issue.id);
+  const [resolveOpen, setResolveOpen] = useState(false);
+  const [ignoreOpen, setIgnoreOpen] = useState(false);
 
   const setStatus = (next: IssueStatus) => {
     if (mutation.isPending) return;
     mutation.mutate(next);
+  };
+
+  const onResolveClick = () => {
+    if (mutation.isPending) return;
+    if (issue.status === 'resolved') {
+      setStatus('open');
+      return;
+    }
+    setResolveOpen(true);
+  };
+
+  const onIgnoreClick = () => {
+    if (mutation.isPending) return;
+    if (issue.status === 'ignored') {
+      setStatus('open');
+      return;
+    }
+    setIgnoreOpen(true);
+  };
+
+  const confirmResolve = () => {
+    mutation.mutate('resolved', {
+      onSuccess: () => setResolveOpen(false),
+      onError: () => setResolveOpen(false),
+    });
+  };
+
+  const confirmIgnore = () => {
+    mutation.mutate('ignored', {
+      onSuccess: () => setIgnoreOpen(false),
+      onError: () => setIgnoreOpen(false),
+    });
   };
 
   return (
@@ -116,27 +151,27 @@ function IssueHeader({ detail }: { detail: IssueDetail }) {
 
       <div className="flex items-center gap-2 shrink-0">
         <StatusButton
-          label="RESOLVE"
+          label={issue.status === 'resolved' ? 'REOPEN' : 'RESOLVE'}
           active={issue.status === 'resolved'}
-          onClick={() => setStatus('resolved')}
+          onClick={onResolveClick}
           disabled={mutation.isPending}
           tone="accent"
         />
         <StatusButton
-          label="IGNORE"
+          label={issue.status === 'ignored' ? 'UN-IGNORE' : 'IGNORE'}
           active={issue.status === 'ignored'}
-          onClick={() => setStatus('ignored')}
+          onClick={onIgnoreClick}
           disabled={mutation.isPending}
           tone="muted"
         />
         <span className="hidden lg:inline h-4 w-px bg-bg-3 mx-1" aria-hidden />
-        <button
-          type="button"
-          aria-label="Settings"
+        <Link
+          href={`/projects/${issue.projectId}/settings`}
+          aria-label="Project settings"
           className="hidden lg:inline-flex p-1.5 text-fg-2 hover:text-fg-0 transition-colors duration-100"
         >
           <Settings size={15} strokeWidth={1.75} />
-        </button>
+        </Link>
         <button
           type="button"
           aria-label="Notifications"
@@ -145,6 +180,40 @@ function IssueHeader({ detail }: { detail: IssueDetail }) {
           <Bell size={15} strokeWidth={1.75} />
         </button>
       </div>
+
+      <ConfirmDialog
+        open={resolveOpen}
+        onClose={() => !mutation.isPending && setResolveOpen(false)}
+        onConfirm={confirmResolve}
+        title="Resolve this issue?"
+        description={
+          <>
+            Marking as resolved removes this issue from the Open list. New
+            events for the same fingerprint will continue to be captured and
+            will surface in the Resolved tab — they won&apos;t reopen the
+            issue automatically.
+          </>
+        }
+        confirmLabel="Resolve"
+        tone="success"
+        pending={mutation.isPending}
+      />
+      <ConfirmDialog
+        open={ignoreOpen}
+        onClose={() => !mutation.isPending && setIgnoreOpen(false)}
+        onConfirm={confirmIgnore}
+        title="Ignore this issue?"
+        description={
+          <>
+            Ignored issues stay captured but disappear from the default Open
+            list. New events for the same fingerprint will continue to arrive
+            and add to the event count, but won&apos;t resurface the issue.
+          </>
+        }
+        confirmLabel="Ignore"
+        tone="warn"
+        pending={mutation.isPending}
+      />
     </div>
   );
 }
