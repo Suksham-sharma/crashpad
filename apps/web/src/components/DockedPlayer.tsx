@@ -30,6 +30,9 @@ export type DockedPlayerHandle = {
 const SPEEDS = [1, 2, 4] as const;
 type Speed = (typeof SPEEDS)[number];
 
+const PING_VISIBLE_MS = 400;
+const PING_SIZE = 20;
+
 type MaybeMeta = {
   type?: number;
   data?: { width?: unknown; height?: unknown };
@@ -52,6 +55,31 @@ function extractRecordedDims(
   return null;
 }
 
+type ClickPing = { t: number; x: number; y: number };
+
+function extractClicks(rrwebData: unknown[]): ClickPing[] {
+  if (rrwebData.length === 0) return [];
+  const first = rrwebData[0] as { timestamp?: unknown };
+  if (typeof first?.timestamp !== 'number') return [];
+  const startTime = first.timestamp;
+  const out: ClickPing[] = [];
+  for (const raw of rrwebData) {
+    const e = raw as {
+      type?: unknown;
+      timestamp?: unknown;
+      data?: { source?: unknown; type?: unknown; x?: unknown; y?: unknown };
+    };
+    if (e.type !== 3) continue;
+    if (typeof e.timestamp !== 'number') continue;
+    const d = e.data;
+    if (!d || d.source !== 2) continue;
+    if (d.type !== 2 && d.type !== 4 && d.type !== 7) continue;
+    if (typeof d.x !== 'number' || typeof d.y !== 'number') continue;
+    out.push({ t: e.timestamp - startTime, x: d.x, y: d.y });
+  }
+  return out;
+}
+
 export const DockedPlayer = forwardRef<DockedPlayerHandle, Props>(
   function DockedPlayer(
     { rrwebData, durationMs, markerOffsets = [], errorOffsetMs, onTimeChange },
@@ -69,6 +97,7 @@ export const DockedPlayer = forwardRef<DockedPlayerHandle, Props>(
     const [scale, setScale] = useState(1);
 
     const recordedDims = useMemo(() => extractRecordedDims(rrwebData), [rrwebData]);
+    const clicks = useMemo(() => extractClicks(rrwebData), [rrwebData]);
 
     useLayoutEffect(() => {
       if (!recordedDims) return;
@@ -187,10 +216,19 @@ export const DockedPlayer = forwardRef<DockedPlayerHandle, Props>(
 
     return (
       <div className="flex flex-col h-full">
-        <div className="relative flex-1 min-h-0 bg-bg-0 overflow-hidden">
-          <div className="absolute left-3 top-3 z-10 inline-flex items-center gap-1.5 h-6 px-2 bg-[rgba(239,68,68,0.12)] text-[color:var(--color-error)] font-mono text-[10px] font-bold uppercase tracking-widest">
+        <div
+          className={clsx(
+            'relative flex-1 min-h-0 bg-bg-0 overflow-hidden',
+            ready && 'cursor-pointer',
+          )}
+          onClick={ready ? togglePlay : undefined}
+        >
+          <div className="pointer-events-none absolute left-3 top-3 z-10 inline-flex items-center gap-1.5 h-6 px-2 bg-[rgba(239,68,68,0.12)] text-[color:var(--color-error)] font-mono text-[10px] font-bold uppercase tracking-widest">
             <span
-              className="w-1.5 h-1.5 bg-[color:var(--color-error)] animate-pulse"
+              className={clsx(
+                'w-1.5 h-1.5 bg-[color:var(--color-error)]',
+                playing && 'animate-pulse',
+              )}
               aria-hidden
             />
             LIVE REPLAY
@@ -209,7 +247,7 @@ export const DockedPlayer = forwardRef<DockedPlayerHandle, Props>(
               >
                 <div
                   ref={hostRef}
-                  className="absolute top-0 left-0 [&_iframe]:bg-white"
+                  className="absolute top-0 left-0 [&_iframe]:bg-white [&_iframe]:pointer-events-none"
                   style={{
                     width: recordedDims.w,
                     height: recordedDims.h,
@@ -217,14 +255,35 @@ export const DockedPlayer = forwardRef<DockedPlayerHandle, Props>(
                     transform: `scale(${scale})`,
                   }}
                 />
+                {clicks.length > 0 && (
+                  <div
+                    className="absolute top-0 left-0 pointer-events-none"
+                    style={{
+                      width: recordedDims.w * scale,
+                      height: recordedDims.h * scale,
+                    }}
+                  >
+                    <ClickPings
+                      clicks={clicks}
+                      currentMs={currentMs}
+                      scale={scale}
+                    />
+                  </div>
+                )}
               </div>
             ) : (
               <div
                 ref={hostRef}
-                className="w-full h-full flex items-center justify-center [&_iframe]:bg-white"
+                className="w-full h-full flex items-center justify-center [&_iframe]:bg-white [&_iframe]:pointer-events-none"
               />
             )}
           </div>
+          {ready && !playing && (
+            <div className="pointer-events-none absolute right-3 top-3 z-10 inline-flex items-center gap-1.5 h-6 px-2 bg-bg-0/80 text-fg-2 font-mono text-[10px] font-bold uppercase tracking-widest">
+              <span className="w-1.5 h-1.5 bg-fg-2" aria-hidden />
+              PAUSED
+            </div>
+          )}
           {!ready && (
             <div className="absolute inset-0 flex items-center justify-center font-mono text-xs uppercase tracking-widest text-fg-2 pointer-events-none">
               Loading replay...
@@ -346,4 +405,53 @@ function formatTime(ms: number) {
   const m = Math.floor(total / 60);
   const s = total % 60;
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+function ClickPings({
+  clicks,
+  currentMs,
+  scale,
+}: {
+  clicks: ClickPing[];
+  currentMs: number;
+  scale: number;
+}) {
+  const visible: React.ReactNode[] = [];
+  for (let i = 0; i < clicks.length; i++) {
+    const c = clicks[i]!;
+    const dt = currentMs - c.t;
+    if (dt < 0 || dt >= PING_VISIBLE_MS) continue;
+    const progress = dt / PING_VISIBLE_MS;
+    let s: number;
+    let opacity: number;
+    if (progress < 0.5) {
+      const p = progress / 0.5;
+      s = 1 - 0.5 * p;
+      opacity = 0.4 + 0.3 * p;
+    } else {
+      const p = (progress - 0.5) / 0.5;
+      s = 0.5 + 0.5 * p;
+      opacity = 0.7 * (1 - p);
+    }
+    const sx = c.x * scale;
+    const sy = c.y * scale;
+    visible.push(
+      <div
+        key={`ping-${c.t}-${i}`}
+        className="absolute rounded-full bg-[color:var(--color-error)]"
+        style={{
+          left: sx - PING_SIZE / 2,
+          top: sy - PING_SIZE / 2,
+          width: PING_SIZE,
+          height: PING_SIZE,
+          opacity,
+          transform: `scale(${s})`,
+          transformOrigin: 'center',
+        }}
+        aria-hidden
+      />,
+    );
+  }
+  if (visible.length === 0) return null;
+  return <>{visible}</>;
 }
