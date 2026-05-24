@@ -10,6 +10,7 @@ import {
 } from '../db/schema';
 import { computeFingerprint } from './fingerprint';
 import { resolveStack } from '../services/sourcemap-resolver';
+import { publish } from '../lib/pubsub';
 
 export interface IngestEventInput {
   correlationId: string;
@@ -61,7 +62,7 @@ export async function ingestEvent(
     }
   }
 
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     const [issue] = await tx
       .insert(issues)
       .values({ projectId, fingerprint, title })
@@ -93,6 +94,15 @@ export async function ingestEvent(
 
     return { eventId: event!.id, issueId: issue!.id, fingerprint };
   });
+
+  publish({
+    type: 'issue:upsert',
+    projectId,
+    issueId: result.issueId,
+    fingerprint: result.fingerprint,
+  });
+
+  return result;
 }
 
 export type { Event, Issue };

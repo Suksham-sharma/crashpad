@@ -9,6 +9,7 @@ import { eventRoutes } from './routes/events';
 import { replayRoutes } from './routes/replays';
 import { sourceMapRoutes } from './routes/sourcemaps';
 import { issueRoutes } from './routes/issues';
+import { streamRoutes } from './routes/stream';
 
 async function dbHealthy(): Promise<boolean> {
   try {
@@ -54,6 +55,7 @@ const app = new Elysia({
   .use(replayRoutes)
   .use(sourceMapRoutes)
   .use(issueRoutes)
+  .use(streamRoutes)
   .listen(env.PORT);
 
 console.log(

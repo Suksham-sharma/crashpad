@@ -7,6 +7,7 @@ import {
   type EventMetadata,
   type SessionEvent,
 } from '../db/schema';
+import { publish } from '../lib/pubsub';
 
 export interface IngestReplayInput {
   correlationId: string;
@@ -53,7 +54,7 @@ export async function ingestReplay(
 ): Promise<IngestReplayResult> {
   const markers = computeTimelineMarkers(input.rrwebData, input.errorTimestamp);
 
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     const [replay] = await tx
       .insert(replays)
       .values({
@@ -82,4 +83,12 @@ export async function ingestReplay(
 
     return { replayId: replay!.id, eventsLinked: updated.length };
   });
+
+  publish({
+    type: 'replay:upsert',
+    projectId,
+    correlationId: input.correlationId,
+  });
+
+  return result;
 }

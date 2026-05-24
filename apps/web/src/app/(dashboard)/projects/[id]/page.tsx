@@ -25,6 +25,7 @@ import {
   type IssueTimeWindow,
 } from '@/queries/issues';
 import { useProject, type Project } from '@/queries/projects';
+import { useProjectStream } from '@/queries/use-project-stream';
 
 export default function ProjectPage() {
   const { id } = useParams<{ id: string }>();
@@ -43,10 +44,11 @@ export default function ProjectPage() {
   const issuesQuery = useProjectIssues(id, {
     status,
     sort: 'last_seen',
-    polling: listening,
     q: debouncedQ,
     since,
   });
+  // SSE invalidates the issue list when new events ingest for this project.
+  useProjectStream(id, listening);
 
   if (projectQuery.isPending) return <PageLoading />;
 
@@ -578,7 +580,7 @@ function StartListeningButton({ onClick }: { onClick: () => void }) {
         Start listening
       </button>
       <span className="font-mono text-xxs uppercase tracking-widest text-fg-2">
-        10s poll · auto-switch on first event
+        live stream · auto-switch on first event
       </span>
     </div>
   );
