@@ -4,6 +4,78 @@ Deferred work. Not in v1 scope. Each entry has enough context that someone (incl
 
 ---
 
+## [v2] AI root-cause analysis per issue
+
+**What:** Populate the `analyses` table — an LLM-generated explanation, root cause, and suggested fix per issue, computed from its resolved stack trace, source context, and the network/console timeline.
+
+**Why:** The schema already models `analyses` in full (`explanation`, `rootCause`, `suggestedFix`, `model`, `promptVersion`, `status: pending|complete|failed`) but nothing writes to it. It's scaffolding for Crashpad's real differentiator: not just "here's the error and the replay" but "here's what went wrong and how to fix it." The resolved frames + source context + session events are exactly the inputs an LLM needs — and they're already captured and persisted.
+
+**Pros:** Turns a passive monitor into an active debugger. The analysis is pure value-add on data already collected. The `promptVersion` column anticipates iterating the prompt without invalidating old analyses.
+
+**Cons:** LLM cost + latency per issue (run it async on first-seen, not per event). Hallucinated fixes erode trust — needs a grounding/confidence story and explicit "suggestion, not gospel" framing. Adds an LLM provider dependency + key management.
+
+**Context:** On a newly-created issue, gather the latest event's `resolvedFrames` plus a sample replay's `sessionEvents`, build a prompt, call the model, and write a row with `status = complete | failed`. `status = pending` lets the dashboard show a spinner. Schema is ready; this is a net-new worker/controller plus a read route. Wire it off the same `issue:upsert` moment the pub/sub already fires.
+
+**Depends on / blocked by:** v1 shipping, and resolved frames being reliably good (source-map pipeline solid).
+
+**Signals to prioritize:** The builder debugs a real bug and wishes the tool had just told them the answer; OR the replay loop feels complete and `analyses` is the obvious next surface.
+
+---
+
+## [v1.5] Redis-backed pub/sub for multi-node SSE
+
+**What:** Replace the in-process `Map` in `apps/api/src/lib/pubsub.ts` with Redis pub/sub so dashboard SSE survives more than one API instance.
+
+**Why:** `pubsub.ts` is explicitly single-instance — `publish()` only reaches subscribers on the same Node process. The moment the API runs behind a load balancer with 2+ instances (the obvious first scaling step on Fly.io), an SSE client connected to instance A never sees an `issue:upsert` published on instance B. Half your dashboard tabs silently stop updating.
+
+**Pros:** SSE survives horizontal scaling. The `subscribe`/`publish` surface stays identical — the swap is contained to one file. Reuses the Redis already provisioned in `docker-compose.yml`.
+
+**Cons:** Adds a Redis hop to the real-time path (currently zero-infra, in-memory). Dropped-message semantics need a glance, though SSE clients already re-fetch on reconnect so at-most-once delivery is fine.
+
+**Context:** `pubsub.ts` already documents this exact migration in its header comment. `publish()` becomes `PUBLISH crashpad:{projectId}`; `subscribeStream` `SUBSCRIBE`s and yields. Keep the in-memory path as the single-node default behind an env flag — no point paying the hop until there's a second instance.
+
+**Depends on / blocked by:** Running more than one API instance. Until then in-process is strictly better.
+
+**Signals to prioritize:** First time the API scales past one instance, OR SSE updates go missing in a multi-instance deploy.
+
+---
+
+## [v1.5] New-issue + spike alerting
+
+**What:** Notify on a newly-created issue and on an issue spiking — via webhook first, then email/Slack.
+
+**Why:** Today you only see errors if the dashboard is open. The core loop of every error monitor is "something broke → you get pinged." Without it, Crashpad is a pull tool; alerting makes it push. The `issue:upsert` pub/sub already fires at exactly the right moment, and first-seen is detectable from the upsert (insert vs. on-conflict update / `eventCount === 1`).
+
+**Pros:** Closes the "I didn't know it was broken" gap. Reuses the existing `publish()` hook. Webhook-first keeps infra minimal — no outbound email provider needed for the first cut.
+
+**Cons:** Threshold tuning is the hard part — naive "alert on every new issue" trains people to ignore it. Needs per-project alert settings UI and a delivery/retry path. Email/Slack add outbound providers.
+
+**Context:** A new notifier subscribes to `issue:upsert`; on first-seen (or a rate spike vs. a baseline) it POSTs to a project-configured webhook. New `projects.alert_webhook_url` column + a field in the settings page. Start with webhooks; layer email/Slack once a real channel is wanted.
+
+**Depends on / blocked by:** v1 shipping. Spike detection wants a little history first.
+
+**Signals to prioritize:** The builder misses a production error because the dashboard wasn't open.
+
+---
+
+## [v1.5] Ingest rate limiting + per-project quotas
+
+**What:** A token-bucket rate limit on `POST /events`, `/replays`, and `/sourcemaps` keyed by project API key and backed by Redis, plus a daily per-project event quota.
+
+**Why:** The ingest key ships in the browser (`NEXT_PUBLIC_CRASHPAD_API_KEY`) — it's public by design. Anyone can lift it from the bundle and flood ingest, inflating storage and Postgres write load with junk. v1 has no backpressure: `middleware/api-key.ts` only checks the key is valid. Redis is already in `docker-compose.yml` for exactly this.
+
+**Pros:** Caps the blast radius of a leaked/abused key. Protects Postgres write throughput. A quota enables a future free-tier story.
+
+**Cons:** Adds a Redis round-trip on the ingest hot path (mitigate with a small in-memory pre-check). Picking limits without real traffic is guesswork.
+
+**Context:** New `lib/rate-limit.ts` (sliding window or token bucket); `middleware/api-key.ts` checks it right after resolving the key and returns `429` with `Retry-After`. Redis key like `rl:{projectId}:{window}`. No SDK change needed — `core/transport.ts` already treats 4xx as a permanent drop, which is the correct behavior for a throttled event.
+
+**Depends on / blocked by:** v1 shipping. Becomes load-bearing the moment Crashpad runs on a public site.
+
+**Signals to prioritize:** First junk-event flood, OR the API key shows up in a public bundle and someone notices.
+
+---
+
 ## [v1.5] Compressed replay storage
 
 **What:** Migrate `replays.rrweb_data` from Postgres JSONB to a compressed format or external blob storage.
@@ -19,42 +91,6 @@ Deferred work. Not in v1 scope. Each entry has enough context that someone (incl
 **Depends on / blocked by:** v1 shipping and having enough dogfood traffic to feel the pain.
 
 **Signals to prioritize:** Postgres table size for `replays` grows past ~1GB, or VACUUM starts showing up in slow query logs.
-
----
-
-## [v1.5] Real-time dashboard updates (SSE)
-
-**What:** Replace the 10-second dashboard polling loop with Server-Sent Events (SSE) pushing new issues as they arrive.
-
-**Why:** The issue list polls `GET /api/v1/issues?project_id=...` every 10 seconds. At one user in one tab this is fine. But the first time you watch an error land in real time and there's a 10-second delay between the crash and it appearing in the dashboard, it feels sluggish. Also: 10s polling from N tabs is N\*6 req/min to the API for data that hasn't changed 95% of the time.
-
-**Pros:** Sub-second latency from error → dashboard visibility. Lower API load. Feels live in a way polling never does.
-
-**Cons:** Adds an SSE endpoint + connection management on the server. Reconnection handling. Works poorly behind some proxies. Slightly more complex than polling.
-
-**Context:** Elysia has built-in SSE support, so the server side is maybe a day of work. The dashboard component needs an `EventSource` subscription and merge-into-list logic. The polling fallback should stay as a safety net for environments where SSE is blocked.
-
-**Depends on / blocked by:** v1 shipping. This is a polish pass, not load-bearing.
-
-**Signals to prioritize:** Dogfooding shows the polling delay is the most noticeable "this feels slow" moment, OR the API starts seeing meaningful traffic from polling.
-
----
-
-## [v1.5] Deferred source map re-resolution
-
-**What:** Re-resolve minified stack traces retroactively when source maps arrive after their corresponding events.
-
-**Why:** In v1, if an event is captured BEFORE its source maps are uploaded, the stack trace is permanently minified. The only fix is "upload source maps before deploying the release." This is fine when you're disciplined, miserable when you forget. Sentry does deferred re-resolution for exactly this reason.
-
-**Pros:** Source map uploads work regardless of timing. Events captured during the upload race become readable the moment the map arrives. Removes a documented gotcha from the DX.
-
-**Cons:** Adds a source-map-upload hook that walks back through recent events and re-resolves. Needs to be efficient (don't re-resolve every event, only those matching `project_id + release`). Changes the fingerprint computation story — should a re-resolved event keep its old fingerprint or get a new one? (Answer: keep old, or you regroup everything.)
-
-**Context:** v1 documents the gotcha in the SDK README and accepts it. The upload endpoint already exists in v1 (`POST /api/v1/sourcemaps`). The v1.5 change is a hook in the sourcemap upload handler that scans `events` for matching release and re-runs `resolveStack()` on any with `metadata.resolved = false`.
-
-**Depends on / blocked by:** v1 shipping.
-
-**Signals to prioritize:** Dogfooding hits this pain the first time the builder deploys a new release and forgets to upload source maps first.
 
 ---
 
@@ -187,3 +223,12 @@ Deferred work. Not in v1 scope. Each entry has enough context that someone (incl
 **Context:** One line in `db/schema.ts`, one line in the resolver. Web renderer doesn't need to read it yet. Flagged as "S1 — cheap forward insurance."
 
 **Signals to prioritize:** Any change to resolver logic that would alter the shape of an existing field, OR the first time we want to backfill resolution retroactively.
+
+---
+
+## Shipped (graduated from this list)
+
+Started here as deferred work; since landed in `main`:
+
+- **Real-time dashboard updates (SSE)** — `EventSource` issue stream replaced the 10s polling loop. In-process pub/sub → SSE per project with 25s heartbeats. (`apps/api/src/routes/stream.ts`, `apps/api/src/lib/pubsub.ts`, `apps/web/src/queries/use-project-stream.ts`)
+- **Deferred source-map re-resolution** — uploading a source map now re-resolves previously-unresolved events for that release. (`apps/api/src/controllers/sourcemaps.ts`)
