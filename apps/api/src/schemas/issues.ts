@@ -14,6 +14,7 @@ export const listIssuesQuery = t.Object({
   status: t.Optional(
     t.Union([t.Literal('open'), t.Literal('resolved'), t.Literal('ignored')]),
   ),
+  kind: t.Optional(t.Union([t.Literal('error'), t.Literal('signal')])),
   sort: t.Optional(
     t.Union([
       t.Literal('last_seen'),

@@ -2,6 +2,10 @@ import { safe, safeAsync } from './safe';
 
 const BUFFER_WINDOW_MS = 30_000;
 
+// rrweb wire constants. EventType.IncrementalSnapshot / IncrementalSource.Mutation.
+const INCREMENTAL_SNAPSHOT = 3;
+const MUTATION_SOURCE = 0;
+
 interface RrwebEvent {
   timestamp: number;
   [key: string]: unknown;
@@ -91,4 +95,21 @@ export function snapshotReplay(): { events: RrwebEvent[]; durationMs: number } {
 
 export function isReplayRunning(): boolean {
   return stopFn !== null;
+}
+
+/**
+ * Whether any DOM mutation was recorded at or after `ts`. Reads the buffer
+ * rrweb is already filling rather than installing a second MutationObserver.
+ * Scans backwards and stops at the first older event — the buffer is in emit
+ * order, so timestamps are monotonic.
+ */
+export function hasMutationsSince(ts: number): boolean {
+  for (let i = buffer.length - 1; i >= 0; i--) {
+    const event = buffer[i]!;
+    if (event.timestamp < ts) break;
+    if (event.type !== INCREMENTAL_SNAPSHOT) continue;
+    const data = event.data as { source?: number } | undefined;
+    if (data?.source === MUTATION_SOURCE) return true;
+  }
+  return false;
 }

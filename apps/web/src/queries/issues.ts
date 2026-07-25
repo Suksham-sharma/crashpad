@@ -9,14 +9,26 @@ import {
 import { api } from '@/lib/api';
 
 export type IssueStatus = 'open' | 'resolved' | 'ignored';
+export type IssueKind = 'error' | 'signal';
 export type IssueSort = 'last_seen' | 'event_count' | 'first_seen';
 export type IssueTimeWindow = '24h' | '7d' | '30d';
+
+export type SignalKind = 'dead_click' | 'rage_click';
+
+export type SignalDetail = {
+  kind: SignalKind;
+  selector: string;
+  clickCount: number;
+  interactionTs: number;
+  targetText: string | null;
+};
 
 export type Issue = {
   id: string;
   projectId: string;
   fingerprint: string;
   title: string;
+  kind: IssueKind;
   status: IssueStatus;
   firstSeen: string;
   lastSeen: string;
@@ -59,6 +71,7 @@ export type IssueEvent = {
   errorType: string;
   errorMessage: string;
   stackTrace: string | null;
+  signal: SignalDetail | null;
   release: string | null;
   environment: string | null;
   resolvedFrames: ResolvedFrame[] | null;
@@ -122,6 +135,7 @@ export const issueKeys = {
 
 export type ListIssuesOpts = {
   status?: IssueStatus;
+  kind?: IssueKind;
   sort?: IssueSort;
   page?: number;
   limit?: number;
@@ -136,6 +150,7 @@ export function useProjectIssues(
   const { polling = false, ...queryOpts } = opts;
   const params = new URLSearchParams();
   if (queryOpts.status) params.set('status', queryOpts.status);
+  if (queryOpts.kind) params.set('kind', queryOpts.kind);
   if (queryOpts.sort) params.set('sort', queryOpts.sort);
   if (queryOpts.page) params.set('page', String(queryOpts.page));
   if (queryOpts.limit) params.set('limit', String(queryOpts.limit));

@@ -6,6 +6,15 @@ export const ingestEventBody = t.Object({
   errorType: t.String({ minLength: 1, maxLength: 200 }),
   errorMessage: t.String({ maxLength: 4000 }),
   stackTrace: t.Optional(t.Nullable(t.String({ maxLength: 64_000 }))),
+  signal: t.Optional(
+    t.Object({
+      kind: t.Union([t.Literal('dead_click'), t.Literal('rage_click')]),
+      selector: t.String({ minLength: 1, maxLength: 500 }),
+      clickCount: t.Integer({ minimum: 1, maximum: 1000 }),
+      interactionTs: t.Number({ minimum: 0 }),
+      targetText: t.Nullable(t.String({ maxLength: 200 })),
+    }),
+  ),
   release: t.Optional(t.Nullable(t.String({ maxLength: 200 }))),
   environment: t.Optional(t.Nullable(t.String({ maxLength: 50 }))),
   metadata: t.Object({

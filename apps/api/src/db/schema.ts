@@ -117,6 +117,11 @@ export const projects = pgTable(
 export const issueStatus = ['open', 'resolved', 'ignored'] as const;
 export type IssueStatus = (typeof issueStatus)[number];
 
+// 'error' is a thrown exception; 'signal' is a silent failure detected from
+// user interaction (dead click, rage click) that never raised one.
+export const issueKind = ['error', 'signal'] as const;
+export type IssueKind = (typeof issueKind)[number];
+
 export const issues = pgTable(
   'issues',
   {
@@ -126,6 +131,7 @@ export const issues = pgTable(
       .references(() => projects.id, { onDelete: 'cascade' }),
     fingerprint: text('fingerprint').notNull(),
     title: text('title').notNull(),
+    kind: text('kind', { enum: issueKind }).notNull().default('error'),
     status: text('status', { enum: issueStatus }).notNull().default('open'),
     firstSeen: timestamp('first_seen', { withTimezone: true })
       .notNull()
@@ -144,6 +150,7 @@ export const issues = pgTable(
       table.fingerprint,
     ),
     index('issues_project_status_idx').on(table.projectId, table.status),
+    index('issues_project_kind_idx').on(table.projectId, table.kind),
   ],
 );
 
@@ -200,6 +207,19 @@ export interface ResolvedFrame {
   postContext?: string[];
 }
 
+export type SignalKind = 'dead_click' | 'rage_click';
+
+// Evidence for a silent failure. Takes the place of a stack trace on events
+// whose issue has kind = 'signal' — those never threw, so there is no stack.
+// Mirrors SignalDetail in packages/sdk/src/core/types.ts (wire contract).
+export interface SignalDetail {
+  kind: SignalKind;
+  selector: string;
+  clickCount: number;
+  interactionTs: number;
+  targetText: string | null;
+}
+
 // events and replays are linked by correlation_id, NOT a foreign key. The SDK
 // stamps the same UUID on both payloads; the server joins on read. This avoids
 // the split-payload race where the replay arrives before (or after) the event.
@@ -221,6 +241,7 @@ export const events = pgTable(
     release: text('release'),
     environment: text('environment'),
     resolvedFrames: jsonb('resolved_frames').$type<ResolvedFrame[]>(),
+    signal: jsonb('signal').$type<SignalDetail>(),
     metadata: jsonb('metadata').$type<EventMetadata>().notNull(),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()

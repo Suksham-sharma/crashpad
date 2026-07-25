@@ -6,6 +6,7 @@ import {
   replays,
   projects,
   type IssueStatus,
+  type IssueKind,
   type Issue,
   type Event,
   type Replay,
@@ -17,6 +18,7 @@ export interface ListIssuesOpts {
   page: number;
   limit: number;
   status?: IssueStatus;
+  kind?: IssueKind;
   sort: 'last_seen' | 'event_count' | 'first_seen';
   q?: string;
   since?: IssueTimeWindow;
@@ -43,11 +45,12 @@ export async function listIssuesForProject(
   projectId: string,
   opts: ListIssuesOpts,
 ): Promise<ListIssuesResult> {
-  const { page, limit, status, sort, q, since } = opts;
+  const { page, limit, status, kind, sort, q, since } = opts;
   const offset = (page - 1) * limit;
 
   const conditions = [eq(issues.projectId, projectId)];
   if (status) conditions.push(eq(issues.status, status));
+  if (kind) conditions.push(eq(issues.kind, kind));
   if (q && q.trim()) {
     conditions.push(ilike(issues.title, `%${escapeLike(q.trim())}%`));
   }

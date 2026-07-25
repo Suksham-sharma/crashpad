@@ -20,16 +20,16 @@
  */
 import type { CrashpadConfig } from './core/types';
 import { setConfig, getConfig, resetConfig } from './core/config';
-import { installCapture, uninstallCapture, report } from './core/capture';
+import {
+  installCapture,
+  uninstallCapture,
+  report,
+  reportSignal,
+} from './core/capture';
 import { startReplay, stopReplay } from './core/replay';
-import {
-  installNetworkCapture,
-  uninstallNetworkCapture,
-} from './core/network';
-import {
-  installConsoleCapture,
-  uninstallConsoleCapture,
-} from './core/console';
+import { installSignalCapture, uninstallSignalCapture } from './core/signals';
+import { installNetworkCapture, uninstallNetworkCapture } from './core/network';
+import { installConsoleCapture, uninstallConsoleCapture } from './core/console';
 import { safe } from './core/safe';
 
 export type {
@@ -40,6 +40,8 @@ export type {
   NetworkSessionEvent,
   ConsoleSessionEvent,
   ConsoleLevel,
+  SignalDetail,
+  SignalKind,
 } from './core/types';
 
 let initialized = false;
@@ -50,7 +52,9 @@ let initialized = false;
  *
  * Installs `window.error` and `unhandledrejection` listeners, and — if
  * `config.replay !== false` — starts the rrweb circular buffer during
- * the next idle frame so it doesn't block first paint.
+ * the next idle frame so it doesn't block first paint. Unless
+ * `config.signals === false`, a click listener is installed to detect
+ * silent failures (dead clicks and rage clicks).
  *
  * Subsequent calls are no-ops. Calling without an `apiKey` is a no-op.
  * The SDK never throws, even if init fails — the host app keeps running.
@@ -65,6 +69,11 @@ function init(config: CrashpadConfig): void {
     installNetworkCapture();
     installConsoleCapture();
     if (resolved.replay) startReplay(resolved.maskInputs);
+    if (resolved.signals) {
+      installSignalCapture((detail) => {
+        void reportSignal(detail);
+      });
+    }
 
     initialized = true;
   });
@@ -105,6 +114,7 @@ function shutdown(): void {
     uninstallCapture();
     uninstallNetworkCapture();
     uninstallConsoleCapture();
+    uninstallSignalCapture();
     stopReplay();
     resetConfig();
     initialized = false;
