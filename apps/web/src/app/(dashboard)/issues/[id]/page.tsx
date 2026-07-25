@@ -66,7 +66,11 @@ export default function IssueDetailPage() {
           />
         </div>
         <div className="bg-bg-1 min-w-0 min-h-0 overflow-hidden">
-          <StackTracePanel detail={data} />
+          {data.issue.kind === 'signal' ? (
+            <EvidencePanel detail={data} onSeek={handleSeek} />
+          ) : (
+            <StackTracePanel detail={data} />
+          )}
         </div>
       </div>
       <BottomTabs
@@ -190,8 +194,8 @@ function IssueHeader({ detail }: { detail: IssueDetail }) {
           <>
             Marking as resolved removes this issue from the Open list. New
             events for the same fingerprint will continue to be captured and
-            will surface in the Resolved tab — they won&apos;t reopen the
-            issue automatically.
+            will surface in the Resolved tab — they won&apos;t reopen the issue
+            automatically.
           </>
         }
         confirmLabel="Resolve"
@@ -339,6 +343,137 @@ function ReplayPane({
   );
 }
 
+// A signal never threw, so there is no stack to show. This panel is what
+// takes its place: the interaction, and what failed to follow it.
+function EvidencePanel({
+  detail,
+  onSeek,
+}: {
+  detail: IssueDetail;
+  onSeek: (ms: number) => void;
+}) {
+  const signal = detail.latestEvent?.signal ?? null;
+  const bufferStart =
+    detail.latestEvent?.metadata.timelineMarkers?.bufferStartTimestamp ?? null;
+
+  if (!signal) {
+    return (
+      <div className="h-full flex flex-col">
+        <EvidenceHeader label="unavailable" />
+        <div className="flex-1 p-4 font-mono text-xs text-fg-2">
+          No interaction detail recorded for this event.
+        </div>
+      </div>
+    );
+  }
+
+  const isDead = signal.kind === 'dead_click';
+  const seekOffset =
+    bufferStart === null
+      ? null
+      : Math.max(0, signal.interactionTs - bufferStart);
+
+  return (
+    <div className="h-full flex flex-col">
+      <EvidenceHeader label={isDead ? 'dead click' : 'rage click'} />
+
+      <div className="flex-1 overflow-auto">
+        <EvidenceRow label="Element">
+          <code className="font-mono text-xs text-fg-0 break-all">
+            {signal.selector}
+          </code>
+        </EvidenceRow>
+
+        {signal.targetText && (
+          <EvidenceRow label="Label">
+            <span className="font-body text-sm text-fg-0">
+              “{signal.targetText}”
+            </span>
+          </EvidenceRow>
+        )}
+
+        {!isDead && (
+          <EvidenceRow label="Clicks">
+            <span className="font-mono text-xs text-fg-0 tabular-nums">
+              {signal.clickCount} within 1s
+            </span>
+          </EvidenceRow>
+        )}
+
+        {isDead && (
+          <EvidenceRow label="Nothing followed">
+            <ul className="space-y-1.5">
+              {['No DOM mutation', 'No network request', 'No navigation'].map(
+                (line) => (
+                  <li
+                    key={line}
+                    className="flex items-center gap-2.5 font-mono text-xs text-fg-1"
+                  >
+                    <span
+                      className="w-1.5 h-1.5 shrink-0 bg-status-open"
+                      aria-hidden
+                    />
+                    {line}
+                  </li>
+                ),
+              )}
+            </ul>
+            <p className="mt-3 font-body text-sm text-fg-2">
+              Measured over the 800ms after the click.
+            </p>
+          </EvidenceRow>
+        )}
+
+        <EvidenceRow label="Page">
+          <span className="font-mono text-xs text-fg-1 break-all">
+            {detail.latestEvent?.metadata.url ?? '—'}
+          </span>
+        </EvidenceRow>
+      </div>
+
+      {seekOffset !== null && (
+        <button
+          type="button"
+          onClick={() => onSeek(seekOffset)}
+          className="shrink-0 h-12 border-t border-border-ghost font-mono text-xs font-bold uppercase tracking-widest text-fg-1 hover:bg-accent-muted hover:text-fg-0 transition-colors duration-100"
+        >
+          Jump to interaction
+        </button>
+      )}
+    </div>
+  );
+}
+
+function EvidenceHeader({ label }: { label: string }) {
+  return (
+    <div className="h-10 px-4 flex items-center justify-between border-b border-border-ghost shrink-0">
+      <span className="font-mono text-[11px] font-bold uppercase tracking-widest text-fg-1">
+        Evidence
+      </span>
+      <span className="font-mono text-[10px] uppercase tracking-widest text-fg-2">
+        {label}
+      </span>
+    </div>
+  );
+}
+
+function EvidenceRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="px-4 py-3 border-b border-border-ghost">
+      <div className="font-mono text-[10px] uppercase tracking-widest text-fg-2">
+        {label}
+      </div>
+      <div className="mt-2">{children}</div>
+    </div>
+  );
+}
+
 function StackTracePanel({ detail }: { detail: IssueDetail }) {
   const event = detail.latestEvent ?? null;
   const resolved = event?.resolvedFrames ?? null;
@@ -420,8 +555,7 @@ function ResolvedFrameRow({
     : shortenFile(frame.rawFile ?? '');
   const line = frame.line ?? frame.rawLine;
   const col = frame.column ?? frame.rawColumn;
-  const showContext =
-    isActive && isResolved && frame.contextLine !== undefined;
+  const showContext = isActive && isResolved && frame.contextLine !== undefined;
 
   return (
     <div
@@ -548,7 +682,10 @@ function BottomTabs({
     >
       <div className="flex h-11 px-6 items-center gap-6 border-b border-border-ghost shrink-0">
         <TabButton id="dom" tab={tab} onTab={onTab} label="DOM" />
-        <TabButton id="stack" tab={tab} onTab={onTab} label="STACK" />
+        {/* Signals have no stack by definition — the Evidence panel replaces it. */}
+        {detail.issue.kind !== 'signal' && (
+          <TabButton id="stack" tab={tab} onTab={onTab} label="STACK" />
+        )}
         <TabButton
           id="network"
           tab={tab}
@@ -962,9 +1099,9 @@ function ConsolePanel({
           No console activity captured
         </p>
         <p className="mt-2 font-body text-sm text-fg-1">
-          The SDK records console.log / info / warn / error / debug calls
-          during the 30s replay buffer. Calls before init or outside that
-          window are not shown.
+          The SDK records console.log / info / warn / error / debug calls during
+          the 30s replay buffer. Calls before init or outside that window are
+          not shown.
         </p>
       </div>
     );
@@ -1095,10 +1232,7 @@ function ConsoleRow({
           {event.level.toUpperCase()}
         </span>
         <span
-          className={clsx(
-            'truncate',
-            isActive ? 'text-fg-0' : 'text-fg-1',
-          )}
+          className={clsx('truncate', isActive ? 'text-fg-0' : 'text-fg-1')}
           title={message}
         >
           {message}

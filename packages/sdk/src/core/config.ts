@@ -12,6 +12,7 @@ export function setConfig(input: CrashpadConfig): ResolvedConfig {
     environment: input.environment ?? null,
     replay: input.replay ?? true,
     maskInputs: input.maskInputs ?? true,
+    signals: input.signals ?? true,
     debug: input.debug ?? false,
   };
   active = resolved;

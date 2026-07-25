@@ -7,6 +7,7 @@ import {
   type Event,
   type Issue,
   type ResolvedFrame,
+  type SignalDetail,
 } from '../db/schema';
 import { computeFingerprint } from './fingerprint';
 import { resolveStack } from '../services/sourcemap-resolver';
@@ -18,6 +19,7 @@ export interface IngestEventInput {
   errorType: string;
   errorMessage: string;
   stackTrace?: string | null;
+  signal?: SignalDetail;
   release?: string | null;
   environment?: string | null;
   metadata: EventMetadata;
@@ -31,17 +33,45 @@ export interface IngestEventResult {
 
 const TITLE_MAX = 200;
 
-function buildTitle(errorType: string, errorMessage: string): string {
-  const raw = errorMessage ? `${errorType}: ${errorMessage}` : errorType;
+function buildTitle(input: IngestEventInput): string {
+  // Signal messages already read as a sentence ("Click on X produced no
+  // effect") — prefixing the detector name would just be redundant.
+  const raw = input.signal
+    ? input.errorMessage
+    : input.errorMessage
+      ? `${input.errorType}: ${input.errorMessage}`
+      : input.errorType;
   return raw.length > TITLE_MAX ? raw.slice(0, TITLE_MAX - 1) + '…' : raw;
+}
+
+function pathnameOf(url: string): string {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return '';
+  }
+}
+
+// Signals group by where the interaction happened, not by the rendered
+// message — that embeds a click count and would split one broken button
+// into a new issue per rage burst.
+function fingerprintOf(input: IngestEventInput): string {
+  if (input.signal) {
+    return computeFingerprint({
+      errorType: input.errorType,
+      errorMessage: `${input.signal.selector} ${pathnameOf(input.metadata.url)}`,
+      stackTrace: null,
+    });
+  }
+  return computeFingerprint(input);
 }
 
 export async function ingestEvent(
   projectId: string,
   input: IngestEventInput,
 ): Promise<IngestEventResult> {
-  const fingerprint = computeFingerprint(input);
-  const title = buildTitle(input.errorType, input.errorMessage);
+  const fingerprint = fingerprintOf(input);
+  const title = buildTitle(input);
 
   // Best-effort: never let resolution failures block ingest.
   let resolvedFrames: ResolvedFrame[] | null = null;
@@ -65,7 +95,14 @@ export async function ingestEvent(
   const result = await db.transaction(async (tx) => {
     const [issue] = await tx
       .insert(issues)
-      .values({ projectId, fingerprint, title })
+      .values({
+        projectId,
+        fingerprint,
+        title,
+        kind: input.signal ? 'signal' : 'error',
+      })
+      // `kind` is deliberately absent here — an existing issue keeps the kind
+      // it was created with.
       .onConflictDoUpdate({
         target: [issues.projectId, issues.fingerprint],
         set: {
@@ -85,6 +122,7 @@ export async function ingestEvent(
         errorType: input.errorType,
         errorMessage: input.errorMessage,
         stackTrace: input.stackTrace ?? null,
+        signal: input.signal ?? null,
         release: input.release ?? null,
         environment: input.environment ?? null,
         resolvedFrames,

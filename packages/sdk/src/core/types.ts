@@ -83,12 +83,78 @@ export interface CrashpadConfig {
   maskInputs?: boolean;
 
   /**
+   * Detect silent failures — user interactions that broke without throwing.
+   * Default `true`.
+   *
+   * Most real bugs never raise an exception: the button wired to nothing,
+   * the handler that returned early, the form that quietly did nothing.
+   * When enabled, the SDK watches clicks on interactive elements and
+   * reports two kinds of signal:
+   *
+   * - **dead click** — a click after which no DOM mutation, no network
+   *   request, and no navigation occurred within 800ms.
+   * - **rage click** — 3 or more clicks on the same element within 1s,
+   *   *and* nothing happened across the whole burst. A stepper or
+   *   fast-forward button gets clicked rapidly in normal use and responds
+   *   every time; that is not frustration, so it is not reported.
+   *
+   * Signals flow through the same pipeline as errors (event + replay clip)
+   * and appear in the dashboard alongside them, so you get the replay of
+   * the moment the user hit the dead button.
+   *
+   * Detection is deliberately conservative — unrelated background activity
+   * (polling requests, animations) reads as a response and suppresses it, so
+   * expect misses rather than noise. Both detectors require `replay` to be
+   * enabled, since they read the rrweb buffer to decide whether the DOM
+   * changed. With `replay: false`, no signals are reported.
+   *
+   * Set to `false` to disable interaction monitoring entirely.
+   */
+  signals?: boolean;
+
+  /**
    * Enable debug logging to `console`. Default `false`.
    *
    * Logs init, capture, and transport status messages. Never enable in
    * production — it makes the SDK chatty on every error.
    */
   debug?: boolean;
+}
+
+/**
+ * Which silent-failure detector produced a signal.
+ *
+ * - `dead_click` — the click had no observable effect.
+ * - `rage_click` — the user clicked the same element repeatedly.
+ */
+export type SignalKind = 'dead_click' | 'rage_click';
+
+/**
+ * Structured detail for a silent failure, attached to {@link EventPayload.signal}.
+ *
+ * Present only on signal events. For a thrown error this field is absent and
+ * `stackTrace` carries the diagnostic information instead — a signal has no
+ * stack by definition, so this is the evidence that replaces it.
+ */
+export interface SignalDetail {
+  /** Which detector fired. */
+  kind: SignalKind;
+  /**
+   * CSS selector identifying the clicked element.
+   *
+   * Derived by priority: `data-testid`, then `id`, then `aria-label`, then
+   * `role` plus text, falling back to a structural `nth-of-type` path capped
+   * at 4 levels. This doubles as the grouping key for the issue, so adding
+   * `data-testid` to interactive elements measurably improves grouping
+   * stability across deploys.
+   */
+  selector: string;
+  /** Clicks attributed to this signal — always 1 for a dead click. */
+  clickCount: number;
+  /** Wall-clock ms of the interaction, used to seek the replay to that moment. */
+  interactionTs: number;
+  /** Trimmed text content of the element, capped at 80 chars. `null` if empty. */
+  targetText: string | null;
 }
 
 /**
@@ -102,6 +168,7 @@ export interface ResolvedConfig {
   environment: string | null;
   replay: boolean;
   maskInputs: boolean;
+  signals: boolean;
   debug: boolean;
 }
 
@@ -117,12 +184,21 @@ export interface EventPayload {
   correlationId: string;
   /** ISO 8601 timestamp of when the error fired (client wall clock). */
   timestamp: string;
-  /** The error's constructor name — `"TypeError"`, `"ReferenceError"`, etc. */
+  /**
+   * The error's constructor name — `"TypeError"`, `"ReferenceError"`, etc.
+   * For silent failures this is the detector name: `"DeadClick"` or
+   * `"RageClick"`.
+   */
   errorType: string;
   /** The error's message. Capped to 4KB server-side. */
   errorMessage: string;
-  /** Raw stack trace. `null` if the error has no stack (rare). */
+  /** Raw stack trace. `null` if the error has no stack (rare, and always for signals). */
   stackTrace: string | null;
+  /**
+   * Silent-failure evidence. Present only when this event is a signal rather
+   * than a thrown error — see {@link SignalDetail}.
+   */
+  signal?: SignalDetail;
   /** Release identifier from {@link CrashpadConfig.release}, or `null`. */
   release: string | null;
   /** Environment tag from {@link CrashpadConfig.environment}, or `null`. */

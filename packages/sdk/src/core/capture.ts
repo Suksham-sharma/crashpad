@@ -3,6 +3,7 @@ import type {
   ReplayPayload,
   ResolvedConfig,
   SessionEvent,
+  SignalDetail,
 } from './types';
 import { getConfig } from './config';
 import { newCorrelationId } from './session';
@@ -16,6 +17,10 @@ interface NormalizedError {
   errorType: string;
   errorMessage: string;
   stackTrace: string | null;
+}
+
+interface EmitInput extends NormalizedError {
+  signal?: SignalDetail;
 }
 
 function normalize(input: unknown): NormalizedError {
@@ -43,7 +48,7 @@ function normalize(input: unknown): NormalizedError {
 
 function buildEventPayload(
   config: ResolvedConfig,
-  err: NormalizedError,
+  err: EmitInput,
   correlationId: string,
   replayReady: boolean,
 ): EventPayload {
@@ -56,6 +61,7 @@ function buildEventPayload(
     errorType: err.errorType,
     errorMessage: err.errorMessage,
     stackTrace: err.stackTrace,
+    ...(err.signal ? { signal: err.signal } : {}),
     release: config.release,
     environment: config.environment,
     metadata: {
@@ -96,17 +102,13 @@ function filterIngestNoise(
   });
 }
 
-export async function report(input: unknown): Promise<void> {
-  const config = getConfig();
-  if (!config) return;
-
-  const err = normalize(input);
+async function emit(config: ResolvedConfig, input: EmitInput): Promise<void> {
   const correlationId = newCorrelationId();
   const replayReady = isReplayRunning();
 
   const eventPayload = buildEventPayload(
     config,
-    err,
+    input,
     correlationId,
     replayReady,
   );
@@ -118,8 +120,6 @@ export async function report(input: unknown): Promise<void> {
     config.apiUrl,
   );
   const errorTimestamp = Date.now();
-
-  logDebug(config, 'capturing', err.errorType, err.errorMessage);
 
   await safeAsync(async () => {
     const ok = await sendEvent(config, eventPayload);
@@ -139,6 +139,39 @@ export async function report(input: unknown): Promise<void> {
       logDebug(config, 'replay sent', ok);
     });
   }
+}
+
+export async function report(input: unknown): Promise<void> {
+  const config = getConfig();
+  if (!config) return;
+
+  const err = normalize(input);
+  logDebug(config, 'capturing', err.errorType, err.errorMessage);
+  await emit(config, err);
+}
+
+function describeSignal(detail: SignalDetail): NormalizedError {
+  if (detail.kind === 'rage_click') {
+    return {
+      errorType: 'RageClick',
+      errorMessage: `${detail.clickCount} rapid clicks on ${detail.selector} with no response`,
+      stackTrace: null,
+    };
+  }
+  return {
+    errorType: 'DeadClick',
+    errorMessage: `Click on ${detail.selector} produced no effect`,
+    stackTrace: null,
+  };
+}
+
+export async function reportSignal(detail: SignalDetail): Promise<void> {
+  const config = getConfig();
+  if (!config) return;
+
+  const described = describeSignal(detail);
+  logDebug(config, 'signal', detail.kind, detail.selector);
+  await emit(config, { ...described, signal: detail });
 }
 
 let errorHandler: ((event: ErrorEvent) => void) | null = null;

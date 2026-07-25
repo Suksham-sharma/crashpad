@@ -6,6 +6,10 @@ const MAX_URL_LENGTH = 2_048;
 const MAX_BUFFER = 500;
 
 let buffer: NetworkSessionEvent[] = [];
+// Tracked separately from the buffer: entries land there on resolve, so an
+// in-flight request is invisible to `snapshotNetworkEvents`. Dead-click
+// detection needs to know a request *started*, not that it finished.
+let lastStartedAt = 0;
 let originalFetch: typeof fetch | null = null;
 let originalXhrOpen: typeof XMLHttpRequest.prototype.open | null = null;
 let originalXhrSend: typeof XMLHttpRequest.prototype.send | null = null;
@@ -78,6 +82,7 @@ function wrapFetch(): void {
     init?: RequestInit,
   ): Promise<Response> {
     const startedAt = Date.now();
+    lastStartedAt = startedAt;
     const url = resolveUrl(input);
     const method = resolveMethod(input, init);
 
@@ -156,6 +161,7 @@ function wrapXhr(): void {
     safe(() => {
       this.__crashpadStartedAt = Date.now();
       this.__crashpadRecorded = false;
+      lastStartedAt = this.__crashpadStartedAt;
       const finish = (status: number | null, failed: boolean) => {
         if (this.__crashpadRecorded) return;
         this.__crashpadRecorded = true;
@@ -207,6 +213,7 @@ export function uninstallNetworkCapture(): void {
     originalXhrOpen = null;
     originalXhrSend = null;
     buffer = [];
+    lastStartedAt = 0;
   });
 }
 
@@ -214,6 +221,11 @@ export function snapshotNetworkEvents(): NetworkSessionEvent[] {
   pruneByTime();
   enforceCap();
   return buffer.slice();
+}
+
+/** Wall-clock ms when the most recent request started, including in-flight ones. */
+export function lastRequestStartedAt(): number {
+  return lastStartedAt;
 }
 
 export function isNetworkCaptureRunning(): boolean {

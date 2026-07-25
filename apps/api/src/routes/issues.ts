@@ -28,6 +28,7 @@ export const issueRoutes = new Elysia({ prefix: '/api/v1' })
         page: query.page ?? 1,
         limit: query.limit ?? 25,
         status: query.status,
+        kind: query.kind,
         sort: query.sort ?? 'last_seen',
         q: query.q,
         since: query.since,

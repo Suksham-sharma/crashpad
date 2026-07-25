@@ -21,6 +21,7 @@ import { useCopy } from '@/lib/use-copy';
 import {
   useProjectIssues,
   type Issue,
+  type IssueKind,
   type IssueStatus,
   type IssueTimeWindow,
 } from '@/queries/issues';
@@ -35,6 +36,7 @@ export default function ProjectPage() {
   const [searchInput, setSearchInput] = useState('');
   const [debouncedQ, setDebouncedQ] = useState('');
   const [since, setSince] = useState<IssueTimeWindow | undefined>(undefined);
+  const [kind, setKind] = useState<IssueKind | undefined>(undefined);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(searchInput), 250);
@@ -43,6 +45,7 @@ export default function ProjectPage() {
 
   const issuesQuery = useProjectIssues(id, {
     status,
+    kind,
     sort: 'last_seen',
     q: debouncedQ,
     since,
@@ -66,7 +69,8 @@ export default function ProjectPage() {
   const project = projectQuery.data;
   if (!project) return <PageError message="Project not found." />;
 
-  const filtersDirty = debouncedQ.length > 0 || since !== undefined;
+  const filtersDirty =
+    debouncedQ.length > 0 || since !== undefined || kind !== undefined;
 
   return (
     <main>
@@ -75,6 +79,8 @@ export default function ProjectPage() {
         project={project}
         status={status}
         onStatus={setStatus}
+        kind={kind}
+        onKind={setKind}
         searchInput={searchInput}
         onSearchInput={setSearchInput}
         since={since}
@@ -92,6 +98,8 @@ function Body({
   project,
   status,
   onStatus,
+  kind,
+  onKind,
   searchInput,
   onSearchInput,
   since,
@@ -104,6 +112,8 @@ function Body({
   project: Project;
   status: IssueStatus;
   onStatus: (s: IssueStatus) => void;
+  kind: IssueKind | undefined;
+  onKind: (k: IssueKind | undefined) => void;
   searchInput: string;
   onSearchInput: (s: string) => void;
   since: IssueTimeWindow | undefined;
@@ -152,6 +162,8 @@ function Body({
       <FilterBar
         status={status}
         onStatus={onStatus}
+        kind={kind}
+        onKind={onKind}
         searchInput={searchInput}
         onSearchInput={onSearchInput}
         since={since}
@@ -162,10 +174,7 @@ function Body({
       {issuesQuery.isFetching ? (
         <IssuesSkeleton />
       ) : issues.length === 0 ? (
-        <EmptyForStatus
-          status={status}
-          searchActive={filtersDirty}
-        />
+        <EmptyForStatus status={status} searchActive={filtersDirty} />
       ) : (
         <div className="max-w-screen-2xl mx-auto pt-4">
           <ul>
@@ -668,9 +677,19 @@ const TIME_TABS: { value: IssueTimeWindow | undefined; label: string }[] = [
   { value: undefined, label: 'All' },
 ];
 
+// No status dot here — dots are the status vocabulary. Kind reads as a plain
+// chip, same treatment as the time range.
+const KIND_TABS: { value: IssueKind | undefined; label: string }[] = [
+  { value: undefined, label: 'All' },
+  { value: 'error', label: 'Errors' },
+  { value: 'signal', label: 'Silent' },
+];
+
 function FilterBar({
   status,
   onStatus,
+  kind,
+  onKind,
   searchInput,
   onSearchInput,
   since,
@@ -680,6 +699,8 @@ function FilterBar({
 }: {
   status: IssueStatus;
   onStatus: (s: IssueStatus) => void;
+  kind: IssueKind | undefined;
+  onKind: (k: IssueKind | undefined) => void;
   searchInput: string;
   onSearchInput: (s: string) => void;
   since: IssueTimeWindow | undefined;
@@ -771,6 +792,27 @@ function FilterBar({
                 </button>
               );
             })}
+
+            <span className="w-px h-6 bg-bg-3 mx-1 shrink-0" aria-hidden />
+
+            {KIND_TABS.map((tab) => {
+              const active = tab.value === kind;
+              return (
+                <button
+                  key={tab.label}
+                  type="button"
+                  onClick={() => onKind(tab.value)}
+                  className={clsx(
+                    'h-10 inline-flex items-center px-4 font-mono text-sm uppercase tracking-widest transition-colors duration-100',
+                    active
+                      ? 'bg-accent-muted text-fg-0'
+                      : 'text-fg-2 hover:text-fg-1 hover:bg-bg-1',
+                  )}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
           </div>
           {total > 0 && (
             <span className="font-mono text-xs uppercase tracking-widest text-fg-2 tabular-nums">
@@ -793,7 +835,12 @@ function IssueRow({ issue, zebra }: { issue: Issue; zebra: boolean }) {
         className="flex items-stretch hover:bg-bg-2 transition-colors duration-100"
       >
         <div className="flex-1 min-w-0 px-6 h-14 flex items-center gap-6">
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0 flex items-center gap-2.5">
+            {issue.kind === 'signal' && (
+              <span className="shrink-0 px-1.5 py-0.5 bg-bg-3 font-mono text-xxs font-bold uppercase tracking-widest text-fg-1">
+                Silent
+              </span>
+            )}
             <div className="truncate font-mono font-bold text-base leading-tight text-fg-0 group-hover:text-accent transition-colors duration-100">
               {issue.title}
             </div>
