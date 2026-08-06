@@ -150,17 +150,24 @@ export async function report(input: unknown): Promise<void> {
   await emit(config, err);
 }
 
+// Lead with the outcome, not the selector. Titles are truncated in the issue
+// list, and a long selector would push the part that says what broke off the
+// end. The selector is still shown in full on the issue's Evidence panel.
 function describeSignal(detail: SignalDetail): NormalizedError {
+  const target = detail.targetText
+    ? `"${detail.targetText}" (${detail.selector})`
+    : detail.selector;
+
   if (detail.kind === 'rage_click') {
     return {
       errorType: 'RageClick',
-      errorMessage: `${detail.clickCount} rapid clicks on ${detail.selector} with no response`,
+      errorMessage: `No response after ${detail.clickCount} rapid clicks on ${target}`,
       stackTrace: null,
     };
   }
   return {
     errorType: 'DeadClick',
-    errorMessage: `Click on ${detail.selector} produced no effect`,
+    errorMessage: `Nothing happened when clicking ${target}`,
     stackTrace: null,
   };
 }

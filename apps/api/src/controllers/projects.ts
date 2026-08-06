@@ -7,7 +7,9 @@ const API_KEY_PREFIX = 'cp_';
 function generateApiKey(): string {
   const bytes = new Uint8Array(24);
   crypto.getRandomValues(bytes);
-  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join(
+    '',
+  );
   return `${API_KEY_PREFIX}${hex}`;
 }
 
@@ -18,7 +20,7 @@ export async function createProject(
   const apiKey = generateApiKey();
   const [created] = await db
     .insert(projects)
-    .values({ userId, name, apiKey })
+    .values({ userId, name: name.trim(), apiKey })
     .returning();
   return created!;
 }
@@ -57,7 +59,7 @@ export async function updateProjectForUser(
 ): Promise<Project | null> {
   const [updated] = await db
     .update(projects)
-    .set({ name: patch.name, updatedAt: new Date() })
+    .set({ name: patch.name.trim(), updatedAt: new Date() })
     .where(and(eq(projects.id, id), eq(projects.userId, userId)))
     .returning();
   return updated ?? null;

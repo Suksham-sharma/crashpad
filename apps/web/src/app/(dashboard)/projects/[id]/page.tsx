@@ -8,10 +8,10 @@ import {
   ChevronRight,
   CircleAlert,
   Copy,
-  Play,
   Search,
   Settings,
   X,
+  Zap,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -32,7 +32,6 @@ export default function ProjectPage() {
   const { id } = useParams<{ id: string }>();
   const projectQuery = useProject(id);
   const [status, setStatus] = useState<IssueStatus>('open');
-  const [listening, setListening] = useState(false);
   const [searchInput, setSearchInput] = useState('');
   const [debouncedQ, setDebouncedQ] = useState('');
   const [since, setSince] = useState<IssueTimeWindow | undefined>(undefined);
@@ -51,7 +50,10 @@ export default function ProjectPage() {
     since,
   });
   // SSE invalidates the issue list when new events ingest for this project.
-  useProjectStream(id, listening);
+  // Always on: gating this behind the onboarding button meant any project with
+  // at least one issue never subscribed, so live updates silently stopped
+  // working after the first event.
+  useProjectStream(id, true);
 
   if (projectQuery.isPending) return <PageLoading />;
 
@@ -87,8 +89,6 @@ export default function ProjectPage() {
         onSince={setSince}
         filtersDirty={filtersDirty}
         issuesQuery={issuesQuery}
-        listening={listening}
-        onStartListening={() => setListening(true)}
       />
     </main>
   );
@@ -106,8 +106,6 @@ function Body({
   onSince,
   filtersDirty,
   issuesQuery,
-  listening,
-  onStartListening,
 }: {
   project: Project;
   status: IssueStatus;
@@ -120,8 +118,6 @@ function Body({
   onSince: (s: IssueTimeWindow | undefined) => void;
   filtersDirty: boolean;
   issuesQuery: ReturnType<typeof useProjectIssues>;
-  listening: boolean;
-  onStartListening: () => void;
 }) {
   if (issuesQuery.isError) {
     return (
@@ -148,13 +144,7 @@ function Body({
     !filtersDirty &&
     !issuesQuery.isFetching
   ) {
-    return (
-      <WaitingState
-        project={project}
-        listening={listening}
-        onStartListening={onStartListening}
-      />
-    );
+    return <WaitingState project={project} />;
   }
 
   return (
@@ -243,15 +233,7 @@ function ProjectHeader({ project }: { project: Project }) {
   );
 }
 
-function WaitingState({
-  project,
-  listening,
-  onStartListening,
-}: {
-  project: Project;
-  listening: boolean;
-  onStartListening: () => void;
-}) {
+function WaitingState({ project }: { project: Project }) {
   return (
     <section className="max-w-[720px] mx-auto px-6 pt-16 pb-24 flex flex-col items-center">
       <div className="flex flex-col items-center text-center mb-10 gap-5">
@@ -278,15 +260,13 @@ function WaitingState({
 
       <InContextReveal apiKey={project.apiKey} />
 
+      {/* The stream is live from page load, so this is a status readout, not
+          a thing to opt into. */}
       <div className="w-full mb-12 mt-4">
-        {listening ? (
-          <PollingIndicator />
-        ) : (
-          <StartListeningButton onClick={onStartListening} />
-        )}
+        <PollingIndicator />
       </div>
 
-      {listening && <Troubleshooter />}
+      <Troubleshooter />
     </section>
   );
 }
@@ -577,24 +557,6 @@ function CopyButton({
   );
 }
 
-function StartListeningButton({ onClick }: { onClick: () => void }) {
-  return (
-    <div className="flex flex-col items-center gap-3">
-      <button
-        type="button"
-        onClick={onClick}
-        className="h-10 inline-flex items-center gap-2 px-5 bg-accent text-accent-fg font-display font-bold text-sm uppercase tracking-wider hover:opacity-90 transition-opacity duration-100"
-      >
-        <Play size={14} strokeWidth={2.25} fill="currentColor" />
-        Start listening
-      </button>
-      <span className="font-mono text-xxs uppercase tracking-widest text-fg-2">
-        live stream · auto-switch on first event
-      </span>
-    </div>
-  );
-}
-
 function PollingIndicator() {
   const elapsed = useElapsed();
   return (
@@ -677,13 +639,14 @@ const TIME_TABS: { value: IssueTimeWindow | undefined; label: string }[] = [
   { value: undefined, label: 'All' },
 ];
 
-// No status dot here — dots are the status vocabulary. Kind reads as a plain
-// chip, same treatment as the time range.
-const KIND_TABS: { value: IssueKind | undefined; label: string }[] = [
-  { value: undefined, label: 'All' },
-  { value: 'error', label: 'Errors' },
-  { value: 'signal', label: 'Silent' },
-];
+// Kind is one toggle, not a chip per value. Three kind chips put a second
+// control labelled "All" beside the time range's "All" and pushed the row to
+// six chips. Collapsing to "Silent only" keeps the row at four and leaves the
+// status dots as the only coloured vocabulary in the bar.
+//
+// Trade-off: errors-only is not reachable from the UI. `kind=error` still works
+// on the API — bring back a third state here if filtering to just exceptions
+// turns out to matter.
 
 function FilterBar({
   status,
@@ -737,6 +700,7 @@ function FilterBar({
               </button>
             )}
           </div>
+
           <div className="flex items-center gap-1.5 shrink-0">
             {TIME_TABS.map((tab) => {
               const active = tab.value === since;
@@ -795,24 +759,20 @@ function FilterBar({
 
             <span className="w-px h-6 bg-bg-3 mx-1 shrink-0" aria-hidden />
 
-            {KIND_TABS.map((tab) => {
-              const active = tab.value === kind;
-              return (
-                <button
-                  key={tab.label}
-                  type="button"
-                  onClick={() => onKind(tab.value)}
-                  className={clsx(
-                    'h-10 inline-flex items-center px-4 font-mono text-sm uppercase tracking-widest transition-colors duration-100',
-                    active
-                      ? 'bg-accent-muted text-fg-0'
-                      : 'text-fg-2 hover:text-fg-1 hover:bg-bg-1',
-                  )}
-                >
-                  {tab.label}
-                </button>
-              );
-            })}
+            <button
+              type="button"
+              onClick={() => onKind(kind === 'signal' ? undefined : 'signal')}
+              aria-pressed={kind === 'signal'}
+              className={clsx(
+                'h-10 inline-flex items-center gap-2 px-4 font-mono text-sm uppercase tracking-widest transition-colors duration-100',
+                kind === 'signal'
+                  ? 'bg-accent-muted text-fg-0'
+                  : 'text-fg-2 hover:text-fg-1 hover:bg-bg-1',
+              )}
+            >
+              <Zap size={13} strokeWidth={2} aria-hidden />
+              Silent only
+            </button>
           </div>
           {total > 0 && (
             <span className="font-mono text-xs uppercase tracking-widest text-fg-2 tabular-nums">

@@ -271,7 +271,9 @@ function IssueTitle({ detail }: { detail: IssueDetail }) {
           </span>
         )}
         <Dot />
-        <span>SEEN {issue.eventCount} TIMES</span>
+        <span>
+          SEEN {issue.eventCount} {issue.eventCount === 1 ? 'TIME' : 'TIMES'}
+        </span>
         <Dot />
         <span>FIRST {relativeTime(issue.firstSeen)}</span>
         {latestEvent?.release && (

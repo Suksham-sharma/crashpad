@@ -7,10 +7,18 @@ import { issueKeys } from './issues';
 export type StreamState = 'idle' | 'connecting' | 'open' | 'error';
 
 type StreamMessage =
-  | { type: 'issue:upsert'; projectId: string; issueId: string; fingerprint: string }
+  | {
+      type: 'issue:upsert';
+      projectId: string;
+      issueId: string;
+      fingerprint: string;
+    }
   | { type: 'replay:upsert'; projectId: string; correlationId: string };
 
-export function useProjectStream(projectId: string, enabled: boolean): StreamState {
+export function useProjectStream(
+  projectId: string,
+  enabled: boolean,
+): StreamState {
   const qc = useQueryClient();
   const [state, setState] = useState<StreamState>('idle');
 
@@ -21,7 +29,9 @@ export function useProjectStream(projectId: string, enabled: boolean): StreamSta
     }
 
     setState('connecting');
-    const source = new EventSource(`/api/v1/projects/${projectId}/stream`);
+    // Served by a Next route handler at /live/*, not through the /api/* rewrite
+    // — that rewrite buffers streaming responses. See the handler for details.
+    const source = new EventSource(`/live/projects/${projectId}/stream`);
 
     const markOpen = () => setState('open');
     source.addEventListener('hello', markOpen);
