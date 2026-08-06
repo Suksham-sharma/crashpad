@@ -6,6 +6,7 @@ import {
   getIssueDetail,
   updateIssueStatus,
 } from '../controllers/issues';
+import { buildBrief } from '../controllers/brief';
 import {
   projectIssuesParams,
   listIssuesQuery,
@@ -45,6 +46,19 @@ export const issueRoutes = new Elysia({ prefix: '/api/v1' })
         return { error: 'not_found' };
       }
       return result;
+    },
+    { params: issueIdParams, auth: true },
+  )
+  .get(
+    '/issues/:id/brief',
+    async ({ user, params, set }) => {
+      const result = await getIssueDetail(params.id, user.id);
+      if (!result) {
+        set.status = 404;
+        return { error: 'not_found' };
+      }
+      set.headers['content-type'] = 'text/markdown; charset=utf-8';
+      return buildBrief(result);
     },
     { params: issueIdParams, auth: true },
   )
