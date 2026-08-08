@@ -4,6 +4,7 @@ import {
   text,
   timestamp,
   integer,
+  bigint,
   jsonb,
   boolean,
   uniqueIndex,
@@ -101,6 +102,10 @@ export const projects = pgTable(
       .references(() => user.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     apiKey: text('api_key').notNull(),
+    repoFullName: text('repo_full_name'),
+    repoId: bigint('repo_id', { mode: 'number' }),
+    repoPrivate: boolean('repo_private'),
+    githubInstallationId: bigint('github_installation_id', { mode: 'number' }),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -117,8 +122,6 @@ export const projects = pgTable(
 export const issueStatus = ['open', 'resolved', 'ignored'] as const;
 export type IssueStatus = (typeof issueStatus)[number];
 
-// 'error' is a thrown exception; 'signal' is a silent failure detected from
-// user interaction (dead click, rage click) that never raised one.
 export const issueKind = ['error', 'signal'] as const;
 export type IssueKind = (typeof issueKind)[number];
 
@@ -191,8 +194,6 @@ export interface EventMetadata {
   };
 }
 
-// Resolution is best-effort per-frame: when a map is missing or the position
-// isn't mapped, the resolved fields are null but the raw fields are filled.
 export interface ResolvedFrame {
   function: string | null;
   file: string | null;
@@ -209,9 +210,6 @@ export interface ResolvedFrame {
 
 export type SignalKind = 'dead_click' | 'rage_click';
 
-// Evidence for a silent failure. Takes the place of a stack trace on events
-// whose issue has kind = 'signal' — those never threw, so there is no stack.
-// Mirrors SignalDetail in packages/sdk/src/core/types.ts (wire contract).
 export interface SignalDetail {
   kind: SignalKind;
   selector: string;
@@ -220,9 +218,6 @@ export interface SignalDetail {
   targetText: string | null;
 }
 
-// events and replays are linked by correlation_id, NOT a foreign key. The SDK
-// stamps the same UUID on both payloads; the server joins on read. This avoids
-// the split-payload race where the replay arrives before (or after) the event.
 export const events = pgTable(
   'events',
   {
@@ -325,6 +320,45 @@ export const sourceMaps = pgTable(
   ],
 );
 
+export const fixRunStatus = [
+  'pending',
+  'running',
+  'complete',
+  'failed',
+] as const;
+export type FixRunStatus = (typeof fixRunStatus)[number];
+
+export const fixRuns = pgTable(
+  'fix_runs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    issueId: uuid('issue_id')
+      .notNull()
+      .references(() => issues.id, { onDelete: 'cascade' }),
+    repoFullName: text('repo_full_name').notNull(),
+    status: text('status', { enum: fixRunStatus }).notNull().default('pending'),
+    githubRunId: bigint('github_run_id', { mode: 'number' }),
+    runUrl: text('run_url'),
+    prUrl: text('pr_url'),
+    error: text('error'),
+    briefFetchedAt: timestamp('brief_fetched_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index('fix_runs_issue_id_idx').on(table.issueId),
+    index('fix_runs_project_created_idx').on(table.projectId, table.createdAt),
+    index('fix_runs_status_idx').on(table.status),
+  ],
+);
+
 export type User = typeof user.$inferSelect;
 export type Session = typeof session.$inferSelect;
 export type Account = typeof account.$inferSelect;
@@ -346,3 +380,6 @@ export type NewReplay = typeof replays.$inferInsert;
 
 export type SourceMap = typeof sourceMaps.$inferSelect;
 export type NewSourceMap = typeof sourceMaps.$inferInsert;
+
+export type FixRun = typeof fixRuns.$inferSelect;
+export type NewFixRun = typeof fixRuns.$inferInsert;

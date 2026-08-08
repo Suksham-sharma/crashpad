@@ -25,6 +25,11 @@ export const env = {
   GITHUB_CLIENT_ID: required('GITHUB_CLIENT_ID'),
   GITHUB_CLIENT_SECRET: required('GITHUB_CLIENT_SECRET'),
   WEB_URL: optional('WEB_URL', 'http://localhost:3000'),
+
+  GITHUB_APP_ID: optional('GITHUB_APP_ID', ''),
+  GITHUB_APP_PRIVATE_KEY: optional('GITHUB_APP_PRIVATE_KEY', ''),
+  GITHUB_APP_SLUG: optional('GITHUB_APP_SLUG', ''),
+  PUBLIC_API_URL: optional('PUBLIC_API_URL', 'http://localhost:4000'),
 } as const;
 
 export type Env = typeof env;

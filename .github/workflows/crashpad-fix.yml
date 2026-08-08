@@ -1,0 +1,143 @@
+# Crashpad "Fix it" — reference workflow.
+#
+# Copy this file to .github/workflows/crashpad-fix.yml in your own repository
+# and merge it to your DEFAULT BRANCH. A workflow_dispatch target must exist on
+# the default branch to be dispatchable at all, even when it is dispatched
+# against another ref — a copy sitting on a feature branch is invisible to the
+# API and is the most common first-run failure.
+#
+# Setup:
+#   1. Merge this file to your default branch.
+#   2. Install the Crashpad GitHub App on this repository.
+#   3. Add an ANTHROPIC_API_KEY repository secret.
+#   4. Connect the repository to your project in Crashpad settings.
+#
+# Two things worth knowing before you turn this on:
+#
+#   * A pull request opened with the default GITHUB_TOKEN does NOT trigger your
+#     other workflows. The PR arrives with an empty check list, which reads like
+#     "CI passed" to a reviewer when in fact CI never ran. To get real checks,
+#     replace GITHUB_TOKEN on the "Open the pull request" step with a PAT or a
+#     token from your own App.
+#
+#   * The brief is reconstructed from real end-user browser sessions. Console
+#     output and DOM text in it are attacker-controllable — anyone who can run
+#     script on the affected page can put text there. That is why the agent runs
+#     with no Bash and no WebFetch below. Do not widen --allowedTools, and never
+#     let this workflow merge its own pull request.
+
+name: Crashpad fix
+run-name: Crashpad fix ${{ inputs.crashpad_run_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      crashpad_run_id:
+        description: Crashpad fix-run id (also used as the run name, so Crashpad can find this run)
+        required: true
+        type: string
+      brief_url:
+        description: URL Crashpad serves the bug report from
+        required: true
+        type: string
+      branch:
+        description: Branch to push the fix to
+        required: true
+        type: string
+
+permissions:
+  contents: write # push the fix branch
+  pull-requests: write # open the pull request
+  id-token: write # mint the OIDC token that authenticates the brief fetch
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # The brief is fetched rather than passed as an input. Inputs are capped
+      # in size, are recorded permanently in the run's event payload, and are
+      # world-readable on a public repo. The OIDC token's `repository` claim is
+      # what proves to Crashpad that this repo is entitled to read this brief.
+      - name: Fetch the brief
+        env:
+          BRIEF_URL: ${{ inputs.brief_url }}
+        run: |
+          set -euo pipefail
+          OIDC=$(curl -sSf \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=crashpad" | jq -r '.value')
+          if [ -z "$OIDC" ] || [ "$OIDC" = "null" ]; then
+            echo "::error::Could not mint an Actions OIDC token. Is 'id-token: write' still set?"
+            exit 1
+          fi
+          curl -sSf -H "Authorization: Bearer $OIDC" "$BRIEF_URL" \
+            -o "$RUNNER_TEMP/crashpad-brief.md"
+          echo "Brief fetched ($(wc -c < "$RUNNER_TEMP/crashpad-brief.md") bytes)."
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install the coding agent
+        run: npm install -g @anthropic-ai/claude-code
+
+      # --allowedTools is a space-separated list. Read/Edit/Write/Glob/Grep let
+      # the agent inspect the repo and change files, and nothing else. Bash and
+      # WebFetch are withheld on purpose: they are the two tools that turn a
+      # prompt injection in captured telemetry into code execution and
+      # exfiltration.
+      - name: Run the coding agent
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set -euo pipefail
+          claude -p "$(cat "$RUNNER_TEMP/crashpad-brief.md")" \
+            --allowedTools "Read Edit Write Glob Grep" \
+            --permission-mode acceptEdits \
+            --output-format text \
+            | tee "$RUNNER_TEMP/crashpad-summary.md"
+
+      - name: Open the pull request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ inputs.branch }}
+          RUN_ID: ${{ inputs.crashpad_run_id }}
+        run: |
+          set -euo pipefail
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "::notice::The agent changed nothing, so there is no pull request to open."
+            exit 0
+          fi
+
+          git config user.name "crashpad-fix[bot]"
+          git config user.email "crashpad-fix[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add -A
+          git commit \
+            -m "fix: address issue reported by Crashpad" \
+            -m "Crashpad fix run: $RUN_ID"
+          git push origin "$BRANCH"
+
+          {
+            echo "Opened automatically by [Crashpad](https://github.com/suksham/crashpad) from a captured user session."
+            echo
+            echo "## What the agent changed"
+            echo
+            cat "$RUNNER_TEMP/crashpad-summary.md"
+            echo
+            echo "---"
+            echo
+            echo "Crashpad fix run \`$RUN_ID\`. Review before merging — this diff was written by an agent"
+            echo "from a bug report reconstructed out of end-user telemetry, and it has not been run."
+          } > "$RUNNER_TEMP/crashpad-pr-body.md"
+
+          gh pr create \
+            --head "$BRANCH" \
+            --title "$(git log -1 --pretty=%s)" \
+            --body-file "$RUNNER_TEMP/crashpad-pr-body.md"

@@ -10,6 +10,8 @@ import { replayRoutes } from './routes/replays';
 import { sourceMapRoutes } from './routes/sourcemaps';
 import { issueRoutes } from './routes/issues';
 import { streamRoutes } from './routes/stream';
+import { briefDeliveryRoutes, fixRoutes } from './routes/fix';
+import { sweepStuckFixRuns } from './controllers/fix';
 
 async function dbHealthy(): Promise<boolean> {
   try {
@@ -56,11 +58,20 @@ const app = new Elysia({
   .use(sourceMapRoutes)
   .use(issueRoutes)
   .use(streamRoutes)
+  .use(fixRoutes)
+  .use(briefDeliveryRoutes)
   .listen(env.PORT);
 
 console.log(
   `crashpad-api listening at http://${app.server?.hostname}:${app.server?.port}`,
 );
+
+sweepStuckFixRuns()
+  .then((n) => {
+    if (n > 0)
+      console.log(`[fix] swept ${n} orphaned run(s) left by a restart`);
+  })
+  .catch((err) => console.error('[fix] sweep failed:', err));
 
 const shutdown = async (signal: string) => {
   console.log(`\n[${signal}] shutting down gracefully...`);

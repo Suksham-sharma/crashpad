@@ -1,11 +1,5 @@
-/**
- * In-process pubsub for dashboard real-time updates.
- *
- * Single-instance only. When we scale past one API node, swap the in-memory
- * Map for Redis pubsub — same `subscribe`/`publish` surface, replace the
- * backing store. Subscribers are keyed by `projectId` so a single SSE
- * connection only sees events for the project it cares about.
- */
+
+import type { FixRunStatus } from '../db/schema';
 
 export type PubSubMessage =
   | {
@@ -18,6 +12,16 @@ export type PubSubMessage =
       type: 'replay:upsert';
       projectId: string;
       correlationId: string;
+    }
+  | {
+      type: 'fix:progress';
+      projectId: string;
+      issueId: string;
+      runId: string;
+      status: FixRunStatus;
+      runUrl: string | null;
+      prUrl: string | null;
+      error: string | null;
     };
 
 type Subscriber = (msg: PubSubMessage) => void;
@@ -46,7 +50,6 @@ export function publish(msg: PubSubMessage): void {
     try {
       fn(msg);
     } catch (err) {
-      // A bad subscriber must never break the publisher (ingest path).
       console.warn('[pubsub] subscriber threw', {
         type: msg.type,
         projectId: msg.projectId,
@@ -60,11 +63,6 @@ export type StreamEvent =
   | { kind: 'msg'; msg: PubSubMessage }
   | { kind: 'heartbeat' };
 
-/**
- * Async-iterator wrapper over `subscribe` — yields messages as they arrive
- * and emits a `heartbeat` tick every `heartbeatMs` of idle so SSE intermediaries
- * don't kill the connection. Cleans up on `signal.abort()`.
- */
 export async function* subscribeStream(
   projectId: string,
   signal: AbortSignal,

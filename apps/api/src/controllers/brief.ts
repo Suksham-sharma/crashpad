@@ -17,8 +17,6 @@ const MAX_ANCESTRY_DEPTH = 5;
 const MAX_CLIMB_DEPTH = 3;
 const MAX_FRAMES = 12;
 
-// rrweb wire constants (2.0.0-alpha.18). Inlined rather than imported because
-// the API has no rrweb dependency and only needs these six numbers.
 const EVENT_FULL_SNAPSHOT = 2;
 const EVENT_INCREMENTAL = 3;
 const EVENT_META = 4;
@@ -31,10 +29,6 @@ const MOUSE_DBLCLICK = 4;
 const NODE_ELEMENT = 2;
 const NODE_TEXT = 3;
 
-// Everything the browser gave us is attacker-controllable: an end user's page
-// can print anything to the console and put anything in a URL or in DOM text.
-// The brief is handed to a coding agent holding a write-scoped token, so these
-// strings are neutralized before they are ever framed as prose.
 const HTML_COMMENT_RE = /<!--[\s\S]*?-->/g;
 const ZERO_WIDTH_RE = /[\u200B-\u200D\u2060\uFEFF]/g;
 const ANSI_RE = /\u001b\[[0-9;]*[A-Za-z]/g;
@@ -53,12 +47,10 @@ function sanitize(value: string, max = MAX_UNTRUSTED_LEN): string {
   return cleaned.length > max ? `${cleaned.slice(0, max)}…` : cleaned;
 }
 
-// Query strings routinely carry auth tokens, presigned signatures and OAuth
-// codes. The brief leaves Crashpad, so the query never goes with it.
-function safeUrl(raw: string): string {
+function safeUrl(raw: string, redact = false): string {
   try {
     const url = new URL(raw);
-    return sanitize(`${url.origin}${url.pathname}`);
+    return sanitize(redact ? url.pathname : `${url.origin}${url.pathname}`);
   } catch {
     return sanitize(raw.split('?')[0] ?? raw);
   }
@@ -123,7 +115,6 @@ function nodeText(node: SerializedNode): string | null {
       parts.push(child.textContent);
       continue;
     }
-    // One level down catches <button><span>Save</span></button>.
     if (child.type === NODE_ELEMENT && child.childNodes) {
       for (const grand of child.childNodes) {
         if (grand.type === NODE_TEXT && typeof grand.textContent === 'string') {
@@ -169,10 +160,6 @@ function walkNode(
   }
 }
 
-// Two passes over the whole stream, not one: rrweb's mirror is not reset on
-// re-snapshot, so node ids stay stable and a click recorded *before* a
-// mid-buffer checkout still resolves against a FullSnapshot that arrives after
-// it. Indexing first is what makes that ordering work.
 function buildNodeIndex(stream: unknown[]): Map<number, ElementInfo> {
   const index = new Map<number, ElementInfo>();
 
@@ -222,9 +209,6 @@ function isInteractive(el: ElementInfo): boolean {
   return role === 'button' || role === 'link';
 }
 
-// rrweb records the deepest target from composedPath(); deriveSelector in the
-// SDK climbs to the interactive ancestor. Climb the same way or the two
-// disagree about which element was clicked.
 function resolveInteractive(
   id: number,
   index: Map<number, ElementInfo>,
@@ -286,6 +270,7 @@ function extractTrail(
   stream: unknown[],
   index: Map<number, ElementInfo>,
   bufferStart: number | null,
+  redact: boolean,
 ): TrailStep[] {
   const steps: TrailStep[] = [];
   let lastScrollAt = -Infinity;
@@ -299,7 +284,11 @@ function extractTrail(
     if (!data) continue;
 
     if (raw.type === EVENT_META && typeof data.href === 'string') {
-      steps.push({ offsetMs, kind: 'navigate', detail: safeUrl(data.href) });
+      steps.push({
+        offsetMs,
+        kind: 'navigate',
+        detail: safeUrl(data.href, redact),
+      });
       continue;
     }
 
@@ -318,12 +307,11 @@ function extractTrail(
 
     if (data.source === SOURCE_INPUT && typeof data.id === 'number') {
       const text = typeof data.text === 'string' ? data.text : '';
-      // maskInputs is on by default, so rrweb has already replaced the value
-      // with asterisks. Report the shape, never the asterisks themselves.
       const masked = text.length > 0 && /^\*+$/.test(text);
-      const value = masked
-        ? `${text.length} chars (masked)`
-        : `"${sanitize(text, 60)}"`;
+      const value =
+        masked || redact
+          ? `${text.length} chars (masked)`
+          : `"${sanitize(text, 60)}"`;
       const el = index.get(data.id) ?? null;
       steps.push({
         offsetMs,
@@ -392,8 +380,6 @@ function formatOffset(offsetMs: number | null): string {
 
 type SelectorQuality = 'greppable' | 'informational' | 'structural';
 
-// The selector is the issue's grouping key, not a search key. Classifying it
-// is what stops the agent burning turns grepping for `nth-of-type`.
 function classifySelector(selector: string): SelectorQuality {
   if (selector.startsWith('[data-testid=')) return 'greppable';
   if (selector.startsWith('#')) return 'greppable';
@@ -416,6 +402,7 @@ function selectorNote(selector: string): string {
 function renderSessionTail(
   sessionEvents: SessionEvent[],
   centreTs: number,
+  redact: boolean,
 ): string[] {
   const lines: string[] = [];
   const sorted = [...sessionEvents].sort((a, b) => a.timestamp - b.timestamp);
@@ -433,13 +420,22 @@ function renderSessionTail(
       const rel = formatOffset(n.timestamp - centreTs);
       const status = n.failed ? 'FAILED' : (n.status ?? '---');
       lines.push(
-        `${rel}  ${n.method.padEnd(6)} ${status} ${n.durationMs}ms  ${safeUrl(n.url)}`,
+        `${rel}  ${n.method.padEnd(6)} ${status} ${n.durationMs}ms  ${safeUrl(n.url, redact)}`,
       );
     }
     lines.push('```');
   }
 
   lines.push('');
+
+  if (redact) {
+    lines.push(
+      logs.length === 0
+        ? 'No console output during the recorded window.'
+        : `${logs.length} console message${logs.length === 1 ? ' was' : 's were'} captured (${summariseLevels(logs)}). Their contents are withheld because this repository is public.`,
+    );
+    return lines;
+  }
 
   if (logs.length === 0) {
     lines.push('No console output during the recorded window.');
@@ -460,6 +456,12 @@ function renderSessionTail(
   }
 
   return lines;
+}
+
+function summariseLevels(logs: ConsoleSessionEvent[]): string {
+  const counts = new Map<string, number>();
+  for (const c of logs) counts.set(c.level, (counts.get(c.level) ?? 0) + 1);
+  return [...counts.entries()].map(([level, n]) => `${n} ${level}`).join(', ');
 }
 
 function renderFrames(frames: ResolvedFrame[]): string[] {
@@ -519,7 +521,14 @@ function signalHeadline(signal: SignalDetail): string {
     : `Clicking ${label} does nothing`;
 }
 
-export function buildBrief(detail: IssueDetail): string {
+export interface BriefOptions {
+  redact?: boolean;
+}
+
+export function buildBrief(
+  detail: IssueDetail,
+  { redact = false }: BriefOptions = {},
+): string {
   const { issue, latestEvent, replay } = detail;
   const out: string[] = [];
 
@@ -543,7 +552,7 @@ export function buildBrief(detail: IssueDetail): string {
   out.push(
     `- **Seen:** ${issue.eventCount} ${issue.eventCount === 1 ? 'time' : 'times'}, first ${issue.firstSeen.toISOString()}, last ${issue.lastSeen.toISOString()}`,
   );
-  if (metadata) out.push(`- **Page:** ${safeUrl(metadata.url)}`);
+  if (metadata) out.push(`- **Page:** ${safeUrl(metadata.url, redact)}`);
   if (latestEvent?.release) {
     out.push(`- **Release:** \`${sanitize(latestEvent.release, 80)}\``);
   }
@@ -566,7 +575,7 @@ export function buildBrief(detail: IssueDetail): string {
   out.push('');
   out.push('## What the user did before this');
   out.push('');
-  const trail = replay ? extractTrail(stream, index, bufferStart) : [];
+  const trail = replay ? extractTrail(stream, index, bufferStart, redact) : [];
   const hasTrail = trail.length > 0;
 
   if (!replay) {
@@ -601,7 +610,7 @@ export function buildBrief(detail: IssueDetail): string {
       signal?.interactionTs ?? markers?.errorTimestamp ?? bufferStart ?? 0;
     out.push('<untrusted-telemetry>');
     out.push('');
-    out.push(...renderSessionTail(replay.sessionEvents, centre));
+    out.push(...renderSessionTail(replay.sessionEvents, centre, redact));
     out.push('');
     out.push('</untrusted-telemetry>');
   }
