@@ -1,18 +1,5 @@
 import type { NextRequest } from 'next/server';
 
-/**
- * SSE passthrough for the dashboard issue stream.
- *
- * Deliberately NOT under `/api/`. The catch-all `/api/:path*` rewrite in
- * next.config.mjs wins over app-router route handlers and buffers the response,
- * so an event stream proxied through it opens and then sits silent forever —
- * no `hello`, no `issue:upsert`, no live updates. Serving the stream from its
- * own path keeps it out of the rewrite's reach while staying same-origin, so
- * the session cookie still flows.
- *
- * Everything else continues to proxy through the rewrite unchanged.
- */
-
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 export const fetchCache = 'force-no-store';
@@ -47,7 +34,6 @@ export async function GET(
       'Content-Type': 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-cache, no-transform',
       Connection: 'keep-alive',
-      // Same reason the API sets it: stop nginx-style proxies buffering us.
       'X-Accel-Buffering': 'no',
     },
   });

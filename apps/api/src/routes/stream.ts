@@ -13,7 +13,6 @@ export const streamRoutes = new Elysia({ prefix: '/api/v1' })
         set.status = 404;
         return { error: 'not_found' };
       }
-      // Disable buffering on nginx-style proxies (Fly.io etc).
       set.headers['X-Accel-Buffering'] = 'no';
       return projectEventStream(project.id, request.signal);
     },
@@ -21,7 +20,6 @@ export const streamRoutes = new Elysia({ prefix: '/api/v1' })
   );
 
 async function* projectEventStream(projectId: string, signal: AbortSignal) {
-  // First flush so EventSource fires onopen even if no events arrive immediately.
   yield sse({ event: 'hello', data: {} });
 
   for await (const ev of subscribeStream(projectId, signal)) {

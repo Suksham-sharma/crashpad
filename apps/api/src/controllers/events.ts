@@ -34,8 +34,6 @@ export interface IngestEventResult {
 const TITLE_MAX = 200;
 
 function buildTitle(input: IngestEventInput): string {
-  // Signal messages already read as a sentence ("Click on X produced no
-  // effect") — prefixing the detector name would just be redundant.
   const raw = input.signal
     ? input.errorMessage
     : input.errorMessage
@@ -52,9 +50,6 @@ function pathnameOf(url: string): string {
   }
 }
 
-// Signals group by where the interaction happened, not by the rendered
-// message — that embeds a click count and would split one broken button
-// into a new issue per rage burst.
 function fingerprintOf(input: IngestEventInput): string {
   if (input.signal) {
     return computeFingerprint({
@@ -73,7 +68,6 @@ export async function ingestEvent(
   const fingerprint = fingerprintOf(input);
   const title = buildTitle(input);
 
-  // Best-effort: never let resolution failures block ingest.
   let resolvedFrames: ResolvedFrame[] | null = null;
   if (input.release && input.stackTrace) {
     try {
@@ -101,8 +95,6 @@ export async function ingestEvent(
         title,
         kind: input.signal ? 'signal' : 'error',
       })
-      // `kind` is deliberately absent here — an existing issue keeps the kind
-      // it was created with.
       .onConflictDoUpdate({
         target: [issues.projectId, issues.fingerprint],
         set: {

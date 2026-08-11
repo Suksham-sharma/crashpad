@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { issueKeys } from './issues';
+import { fixKeys } from './fix';
 
 export type StreamState = 'idle' | 'connecting' | 'open' | 'error';
 
@@ -13,27 +14,33 @@ type StreamMessage =
       issueId: string;
       fingerprint: string;
     }
-  | { type: 'replay:upsert'; projectId: string; correlationId: string };
+  | { type: 'replay:upsert'; projectId: string; correlationId: string }
+  | {
+      type: 'fix:progress';
+      projectId: string;
+      issueId: string;
+      runId: string;
+      status: 'pending' | 'running' | 'complete' | 'failed';
+      runUrl: string | null;
+      prUrl: string | null;
+      error: string | null;
+    };
 
 export function useProjectStream(
   projectId: string,
   enabled: boolean,
 ): StreamState {
   const qc = useQueryClient();
-  const [state, setState] = useState<StreamState>('idle');
+  const [live, setLive] = useState<'connecting' | 'open' | 'error'>(
+    'connecting',
+  );
 
   useEffect(() => {
-    if (!enabled || !projectId) {
-      setState('idle');
-      return;
-    }
+    if (!enabled || !projectId) return;
 
-    setState('connecting');
-    // Served by a Next route handler at /live/*, not through the /api/* rewrite
-    // — that rewrite buffers streaming responses. See the handler for details.
     const source = new EventSource(`/live/projects/${projectId}/stream`);
 
-    const markOpen = () => setState('open');
+    const markOpen = () => setLive('open');
     source.addEventListener('hello', markOpen);
     source.onopen = markOpen;
 
@@ -46,20 +53,23 @@ export function useProjectStream(
       }
       if (msg.type === 'issue:upsert' || msg.type === 'replay:upsert') {
         void qc.invalidateQueries({ queryKey: issueKeys.byProject(projectId) });
+        return;
+      }
+      if (msg.type === 'fix:progress') {
+        void qc.invalidateQueries({ queryKey: fixKeys.run(msg.issueId) });
       }
     };
 
     source.onerror = () => {
-      // EventSource auto-reconnects; the next onopen will flip us back.
-      setState('error');
+      setLive('error');
     };
 
     return () => {
       source.removeEventListener('hello', markOpen);
       source.close();
-      setState('idle');
+      setLive('connecting');
     };
   }, [projectId, enabled, qc]);
 
-  return state;
+  return enabled && projectId ? live : 'idle';
 }
