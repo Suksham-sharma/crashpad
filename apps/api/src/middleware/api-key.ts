@@ -2,7 +2,6 @@ import { Elysia } from 'elysia';
 import { findProjectByApiKey } from '../controllers/projects';
 import type { Project } from '../db/schema';
 
-// Reads `Authorization: Bearer cp_...`. Used on ingest routes, not dashboard.
 export const requireApiKey = new Elysia({ name: 'require-api-key' }).derive(
   { as: 'scoped' },
   async ({ headers, set }) => {

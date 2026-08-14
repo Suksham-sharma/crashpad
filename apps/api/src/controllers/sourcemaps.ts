@@ -9,8 +9,6 @@ export interface UploadSourceMapInput {
   content: string;
 }
 
-// Cap the catch-up scan per upload so a long-quiet release doesn't pin the
-// event loop. Realistic dogfood scale won't touch this; raise if it bites.
 const DEFERRED_RESOLVE_LIMIT = 500;
 
 export async function uploadSourceMap(
@@ -31,7 +29,6 @@ export async function uploadSourceMap(
     })
     .returning();
 
-  // Fire-and-forget: don't slow the CLI upload. Any error stays local.
   void resolveDeferredEvents(projectId, input.release).catch((err) => {
     console.warn('[sourcemaps] deferred resolve failed', {
       projectId,
@@ -62,17 +59,6 @@ export async function findSourceMap(
   return rows[0] ?? null;
 }
 
-/**
- * Re-resolve previously-unresolved events for a release after new source maps
- * arrive. No-op for events that already have `resolvedFrames`, and only
- * writes back when resolution actually produced at least one mapped frame —
- * so a wrong-release upload won't lock in an all-null result and block a
- * later corrected upload from helping.
- *
- * Query is unindexed on (project_id, release); at dogfood scale the existing
- * (project_id, timestamp) index plus the `release` filter is fine. Revisit
- * if profiling shows the scan as hot.
- */
 async function resolveDeferredEvents(
   projectId: string,
   release: string,

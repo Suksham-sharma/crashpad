@@ -16,7 +16,6 @@ async function main() {
   const sql = postgres(DATABASE_URL!, { max: 1 });
   const db = drizzle(sql);
 
-  // pgcrypto is required for gen_random_uuid() which Drizzle's defaultRandom() emits.
   console.log('[migrate] ensuring pgcrypto extension...');
   await sql`CREATE EXTENSION IF NOT EXISTS pgcrypto`;
 

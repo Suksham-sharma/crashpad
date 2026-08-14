@@ -4,7 +4,6 @@ import { findSourceMap } from '../controllers/sourcemaps';
 import type { ResolvedFrame } from '../db/schema';
 
 const MAX_FRAMES = 50;
-// Bounds memory: source map content cap is 20MB, so MAX_FRAMES × that is reachable via SDK-controlled stack text.
 const MAX_UNIQUE_BUNDLES = 10;
 const CONTEXT_LINES = 3;
 
@@ -47,7 +46,6 @@ function buildContext(
   };
 }
 
-// Best-effort per frame; returns null only when no frames parse out of the input.
 export async function resolveStack(
   stackText: string,
   projectId: string,

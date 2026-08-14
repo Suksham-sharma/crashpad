@@ -126,23 +126,36 @@ Raw material available from `getIssueDetail(issueId, userId)` → `{ issue, late
 | `events`  | `errorType`, `errorMessage`, `stackTrace`, `release`, `environment`, `resolvedFrames`, `signal` (`SignalDetail`), `metadata` (`url`, `userAgent`, `viewport`, `timelineMarkers`) |
 | `replays` | `rrwebData` (interaction trail lives in `type:3` IncrementalSnapshot events), `sessionEvents`, `durationMs`                                                                      |
 
-**2. Schema.** `projects.repo_full_name` + `projects.github_installation_id`. New `fix_runs`
-table: issue FK, `status` (`pending`\|`running`\|`complete`\|`failed`), `prUrl`, timestamps.
-New Drizzle migration.
+**2. Schema. ✅ SHIPPED.** Migration `0004_outgoing_preak.sql`. `projects` gained
+`repo_full_name`, `repo_id`, `repo_private`, `github_installation_id`. New `fix_runs` table
+carries `repo_full_name` snapshotted at dispatch, so the OIDC `repository` claim is checked
+against the repo the run actually went to rather than wherever the project points now.
 
-**3. `services/github-app.ts`** — App JWT → installation token → dispatch. It goes in
+**3. `services/github-app.ts` ✅ SHIPPED.** App JWT → installation token (cached to expiry
+− 60 s) → pre-flight → dispatch → poll, plus Actions OIDC verification. It goes in
 `services/` because that folder is for **external adapters only**; `controllers/` is
-internal domain logic. This convention is locked.
+internal domain logic. This convention is locked. Both `node:crypto` paths were verified
+under Bun once: PKCS#1 `createSign`, and JWK `createPublicKey` + `createVerify` including
+the negative cases (swapped repository claim, foreign signing key).
 
-**4. Endpoints.** `POST /api/v1/issues/:id/fix` builds the brief, dispatches, writes a
-`fix_runs` row. `GET /api/v1/issues/:id/fix` polls the Actions run and publishes progress
-through `lib/pubsub.ts` `publish()` so it streams to the UI over the SSE channel that
-already exists — no inbound webhook in v1.
+**4. Endpoints. ✅ SHIPPED.** `POST /api/v1/issues/:id/fix` dispatches and writes a
+`fix_runs` row; `GET` polls the Actions run and publishes `fix:progress` through
+`lib/pubsub.ts` so it streams over the existing SSE channel — no inbound webhook in v1.
+`GET /api/v1/fix-runs/:id/brief` sits **outside `authGuard`** and authenticates with the
+run's Actions OIDC token. Rate limit is 10 dispatches per project per rolling hour, plus one
+active run per issue. `sweepStuckFixRuns()` runs on boot.
 
-**5. Reference workflow.** A `.github/workflows/crashpad-fix.yml` users drop into their repo.
+**5. Reference workflow. ✅ SHIPPED.** `.github/workflows/crashpad-fix.yml`. Agent pinned to
+`Read Edit Write Glob Grep`.
 
-**6. UI.** "Connect repository" on project settings; a Fix it button on the issue page with
-run status streaming into a panel.
+**6. UI. ✅ SHIPPED.** Repository section on project settings (connect / change / disconnect,
+public-repo and missing-workflow warnings); a Fix it button in the issue header and a FIX tab
+in the bottom panel carrying run state, the PR link, and a "read the brief" link.
+`fix:progress` was added to **both** `lib/pubsub.ts` and the hand-rolled union in
+`queries/use-project-stream.ts`.
+
+**Not yet done:** no end-to-end run against a real repository. That needs a registered GitHub
+App and a scratch repo, neither of which exists yet.
 
 ### What the research changed
 
@@ -170,10 +183,21 @@ Findings that invalidate parts of the original spec. These are settled; don't re
   the workflow yet" is a real diagnosis. Note the file must exist **on the default branch**
   to be dispatchable at all, even when dispatching another ref — that's the most likely
   first-run failure.
-- **`installation_id` from the setup callback is spoofable.** Verify it against
-  `GET /user/installations` with the signed-in user's OAuth token, or anyone can bind their
-  repo to a victim's project. The setup URL also does not preserve a `state` param, so the
-  "which project am I connecting?" round-trip needs a session stash or a post-install picker.
+- **`installation_id` from the setup callback is spoofable**, and must be re-derived
+  server-side or anyone can bind their repo to a victim's project. The setup URL also does
+  not preserve a `state` param, so the "which project am I connecting?" round-trip needs a
+  session stash or a post-install picker.
+  **Correction (verified against the live API, 2026-08-10):** the fix originally recorded
+  here — check it against `GET /user/installations` with the signed-in user's OAuth token —
+  **does not work.** That endpoint demands a token authorized to a *GitHub App*; Crashpad
+  signs users in through an *OAuth App*, so it returns
+  `You must authenticate with an access token authorized to a GitHub App`, always. Nor is
+  broadening the login an option: listing the user's repos directly would need the `repo`
+  scope, i.e. write access to every repository they own — the exact over-permissioning the
+  GitHub App design exists to avoid. What ships instead runs the match in reverse:
+  `GET /user` + `GET /user/orgs` (read-only) give the user's identities, `GET /app/installations`
+  (App JWT) lists the App's own installations, and only those whose account matches an
+  identity are offered. Costs one extra read scope, `read:org`, and no write scope at all.
 - **Persist `repo_id` and `repo_private` too**, beyond the two columns in the spec.
   `repo_full_name` breaks on rename; `repo_id` is stable and lets tokens be scoped via
   `repository_ids`.

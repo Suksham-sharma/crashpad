@@ -1,8 +1,6 @@
 import { Elysia } from 'elysia';
 import { env } from '../env';
 
-// Ingest routes accept any origin (SDK customers run anywhere); dashboard
-// routes lock to WEB_URL because they ride on the session cookie.
 const INGEST = /^\/api\/v1\/(events|replays|sourcemaps)(\/|$)/;
 
 export const corsMiddleware = new Elysia({ name: 'crashpad-cors' }).onRequest(

@@ -50,9 +50,9 @@ Crashpad is split into three independently-deployable pieces in one Bun monorepo
 
 When an error fires, the SDK normalizes it, stamps a fresh **`correlationId`**, and sends **two separate payloads**:
 
-| Payload | Endpoint | Why separate |
-|---------|----------|--------------|
-| **Event** (small) | `POST /api/v1/events` | `fetch` `keepalive` so it survives page-unload |
+| Payload            | Endpoint               | Why separate                                          |
+| ------------------ | ---------------------- | ----------------------------------------------------- |
+| **Event** (small)  | `POST /api/v1/events`  | `fetch` `keepalive` so it survives page-unload        |
 | **Replay** (large) | `POST /api/v1/replays` | `keepalive` caps bodies at 64 KB; replays exceed that |
 
 Both carry the same `correlationId`. The server joins them on read rather than via a foreign key — this sidesteps the split-payload race where the replay arrives before (or after) the event. Calls to Crashpad's own ingest endpoints are filtered out of the captured session so the SDK never records itself.
@@ -71,6 +71,36 @@ Source maps are uploaded out-of-band via the `crashpad` CLI. Because resolution 
 ### 3. The dashboard (`@crashpad/web`) — Next.js 15
 
 App Router, TanStack Query, Zustand, Tailwind v4. Issues stream in **live over SSE** (no polling). Open an issue to get the resolved stack frames, the source-context block, the network/console timeline, and the **docked replay player** scrubbing in lockstep with the error timeline.
+
+---
+
+## "Fix it" — issue → agent → pull request
+
+One button on an issue page. Crashpad packages the issue into a bug report and dispatches a `workflow_dispatch` into **your** repository. The agent runs in your CI, with your model key, on your checkout, and opens the pull request with the workflow's own `GITHUB_TOKEN`. Crashpad never clones your code and never holds a write token.
+
+**The brief is the product.** An agent that opens a PR from a stack trace is a commodity. What is not is the input: Crashpad detects _silent failures_ — dead clicks and rage clicks — where there is no exception and no stack trace at all. For those the brief reconstructs a behavioural bug report from the session replay: which element was clicked, what did **not** happen in the 800 ms after, the interaction trail leading in, and the network/console activity around it.
+
+Because the derived CSS selector is often a structural `nth-of-type` path that appears nowhere in source, the brief ranks its search keys — visible label, then a DOM reconstruction from the rrweb snapshot, then the route — and explicitly tells the agent when a selector is _not_ worth grepping for.
+
+### Setting it up
+
+1. Register a GitHub App with **`actions: write`** + **`contents: read`**. Nothing else — it can never write your code.
+2. Set `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY`, `GITHUB_APP_SLUG` and `PUBLIC_API_URL` on the API. All four are optional; without them Fix it is simply unavailable and everything else runs as before.
+3. Copy [`.github/workflows/crashpad-fix.yml`](.github/workflows/crashpad-fix.yml) into your repo and **merge it to your default branch** — a `workflow_dispatch` target is undispatchable until it lands there.
+4. Add an `ANTHROPIC_API_KEY` repository secret.
+5. Connect the repository under project **Settings → Repository**.
+
+### Trust model
+
+The brief is built from real end-user browser sessions, so console output, URLs and DOM text in it are attacker-controllable — anyone who can run script on the affected page can put text there. Three things follow, and none of them is optional:
+
+- The brief **fences untrusted sections** behind an explicit `<untrusted-telemetry>` declaration and sanitizes them server-side (HTML comments, zero-width characters, ANSI escapes and fence breakouts are stripped; query strings never leave Crashpad).
+- The reference workflow pins the agent to `Read Edit Write Glob Grep`. **No `Bash`, no `WebFetch`** — those are the two tools that turn an injected instruction into execution and exfiltration.
+- Briefs for **public** repositories are redacted server-side: console contents and page origins are withheld. Element labels survive, because they are your own UI strings and they are what makes the brief useful.
+
+The brief is fetched by the runner rather than passed as a workflow input, because inputs are size-capped, recorded permanently in the run's event payload, and world-readable on a public repo. The fetch authenticates with the run's **Actions OIDC token**, whose `repository` claim binds the request to the repo entitled to read it.
+
+One caveat worth knowing: a PR opened with the default `GITHUB_TOKEN` **does not trigger your other workflows**, so it arrives with an empty check list that reads like a green CI. Swap in your own token on the PR step if that matters.
 
 ---
 
@@ -113,20 +143,26 @@ crashpad/
 
 Ingest endpoints authenticate with a project **API key** (`Authorization: Bearer <key>`); dashboard endpoints use the **GitHub session** cookie.
 
-| Method | Path | Auth | Purpose |
-|--------|------|------|---------|
-| `GET` | `/health` | — | Liveness + DB probe |
-| `POST` | `/api/v1/events` | API key | Ingest an error event |
-| `POST` | `/api/v1/replays` | API key | Ingest a session replay |
-| `POST` | `/api/v1/sourcemaps` | API key | Upload a source map for a release |
-| `GET` | `/api/v1/me` | session | Current user |
-| `GET` `POST` | `/api/v1/projects` | session | List / create projects |
-| `GET` `PATCH` `DELETE` | `/api/v1/projects/:id` | session | Read / rename / delete project |
-| `POST` | `/api/v1/projects/:id/regenerate-key` | session | Rotate API key |
-| `GET` | `/api/v1/projects/:id/issues` | session | List issues (search + time filter) |
-| `GET` `PATCH` | `/api/v1/issues/:id` | session | Read issue / change status |
-| `GET` | `/api/v1/projects/:id/stream` | session | SSE live updates |
-| `*` | `/api/auth/*` | — | better-auth (GitHub OAuth) |
+| Method                 | Path                                  | Auth         | Purpose                                           |
+| ---------------------- | ------------------------------------- | ------------ | ------------------------------------------------- |
+| `GET`                  | `/health`                             | —            | Liveness + DB probe                               |
+| `POST`                 | `/api/v1/events`                      | API key      | Ingest an error event                             |
+| `POST`                 | `/api/v1/replays`                     | API key      | Ingest a session replay                           |
+| `POST`                 | `/api/v1/sourcemaps`                  | API key      | Upload a source map for a release                 |
+| `GET`                  | `/api/v1/me`                          | session      | Current user                                      |
+| `GET` `POST`           | `/api/v1/projects`                    | session      | List / create projects                            |
+| `GET` `PATCH` `DELETE` | `/api/v1/projects/:id`                | session      | Read / rename / delete project                    |
+| `POST`                 | `/api/v1/projects/:id/regenerate-key` | session      | Rotate API key                                    |
+| `GET`                  | `/api/v1/projects/:id/issues`         | session      | List issues (search + time filter)                |
+| `GET` `PATCH`          | `/api/v1/issues/:id`                  | session      | Read issue / change status                        |
+| `GET`                  | `/api/v1/issues/:id/brief`            | session      | Agent-ready bug report (markdown)                 |
+| `POST` `GET`           | `/api/v1/issues/:id/fix`              | session      | Dispatch a fix run / poll it                      |
+| `GET` `PUT` `DELETE`   | `/api/v1/projects/:id/repo`           | session      | Read / connect / disconnect the repo              |
+| `GET`                  | `/api/v1/github/app`                  | session      | Is the GitHub App configured, and its install URL |
+| `GET`                  | `/api/v1/github/installations`        | session      | Repos you can connect                             |
+| `GET`                  | `/api/v1/fix-runs/:id/brief`          | Actions OIDC | Brief delivery to a workflow run                  |
+| `GET`                  | `/api/v1/projects/:id/stream`         | session      | SSE live updates                                  |
+| `*`                    | `/api/auth/*`                         | —            | better-auth (GitHub OAuth)                        |
 
 ---
 
@@ -154,21 +190,21 @@ bunx crashpad upload --dir ./dist --release "$GIT_SHA" --api-key "$CRASHPAD_API_
 
 ## Tech stack
 
-| Layer | Choice |
-|-------|--------|
-| API | Elysia.js on Bun |
-| Database | PostgreSQL 16 (metadata + events + replays + source maps in one DB) |
-| ORM | Drizzle |
-| Cache | Redis 7 (rate limiting / dedup — wiring in progress) |
-| Real-time | Server-Sent Events over an in-process pub/sub |
-| Frontend | Next.js 15 App Router + React 19 + Tailwind v4 |
-| Data layer | TanStack Query + Zustand |
-| Auth | better-auth, GitHub OAuth only |
-| Replay capture | rrweb (lazy import, 30 s circular buffer) |
-| Replay playback | custom docked player |
-| Source maps | `source-map-js` + `stacktrace-parser`, best-effort per-frame |
-| Monorepo | Bun workspaces |
-| Testing | bun test + Playwright |
+| Layer           | Choice                                                              |
+| --------------- | ------------------------------------------------------------------- |
+| API             | Elysia.js on Bun                                                    |
+| Database        | PostgreSQL 16 (metadata + events + replays + source maps in one DB) |
+| ORM             | Drizzle                                                             |
+| Cache           | Redis 7 (rate limiting / dedup — wiring in progress)                |
+| Real-time       | Server-Sent Events over an in-process pub/sub                       |
+| Frontend        | Next.js 15 App Router + React 19 + Tailwind v4                      |
+| Data layer      | TanStack Query + Zustand                                            |
+| Auth            | better-auth, GitHub OAuth only                                      |
+| Replay capture  | rrweb (lazy import, 30 s circular buffer)                           |
+| Replay playback | custom docked player                                                |
+| Source maps     | `source-map-js` + `stacktrace-parser`, best-effort per-frame        |
+| Monorepo        | Bun workspaces                                                      |
+| Testing         | bun test + Playwright                                               |
 
 ---
 

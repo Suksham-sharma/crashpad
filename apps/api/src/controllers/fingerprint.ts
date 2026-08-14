@@ -20,7 +20,6 @@ function normalizeMessage(message: string): string {
     .trim();
 }
 
-// Drop line:col so shifting minified offsets don't split one bug into many issues.
 function topFrame(stackTrace: string): string | null {
   for (const line of stackTrace.split('\n')) {
     const trimmed = line.trim();
