@@ -7,6 +7,7 @@ import { useEffect } from 'react';
 import { useCopy } from '@/lib/use-copy';
 import { useProjects, type Project } from '@/queries/projects';
 import { useUiStore } from '@/stores/ui-store';
+import { formatRelative, maskApiKey } from '@/lib/format';
 
 export default function DashboardPage() {
   const { data: projects, isPending, isError, error, refetch } = useProjects();
@@ -15,22 +16,22 @@ export default function DashboardPage() {
   const ready = !isPending && !isError && projects !== undefined;
 
   return (
-    <main className="min-h-[calc(100vh-60px)]">
+    <main className="min-h-[calc(100vh-var(--nav-height))]">
       <div className="max-w-7xl mx-auto px-6">
         <header className="h-24 flex items-end justify-between pb-5 pt-4 gap-6">
           <div className="flex flex-col gap-2 min-w-0">
-            <span className="font-mono text-xxs uppercase tracking-widest text-fg-2">
+            <span className="font-mono text-3xs uppercase tracking-widest text-fg-2">
               {ready
                 ? `${projectCount} ${projectCount === 1 ? 'project' : 'projects'}`
                 : 'workspace'}
             </span>
-            <h1 className="font-display font-bold text-xl leading-none tracking-[-0.02em] text-fg-0">
+            <h1 className="font-display font-bold text-3xl leading-none tracking-[-0.02em] text-fg-0">
               Projects
             </h1>
           </div>
           <Link
             href="/dashboard/new"
-            className="h-10 inline-flex items-center gap-2 px-5 shrink-0 bg-accent text-accent-fg font-display font-bold text-sm uppercase tracking-wider hover:opacity-90 transition-opacity duration-100"
+            className="h-10 inline-flex items-center gap-2 px-5 shrink-0 bg-brand text-brand-fg font-display font-bold text-xs uppercase tracking-wider hover:opacity-90 transition-opacity duration-100"
           >
             <Plus size={14} strokeWidth={2.5} />
             New project
@@ -80,7 +81,7 @@ function SkeletonList() {
 
 function ListHeader() {
   return (
-    <div className="h-9 flex items-center px-5 gap-5 border-b border-border-ghost font-mono text-xxs uppercase tracking-widest text-fg-2">
+    <div className="h-8 flex items-center px-5 gap-5 border-b border-border-ghost font-mono text-3xs uppercase tracking-widest text-fg-2">
       <span className="w-2 shrink-0" aria-hidden />
       <span className="flex-1 min-w-0">Name</span>
       <span className="hidden md:block w-24 shrink-0">Created</span>
@@ -99,13 +100,13 @@ function ErrorState({
 }) {
   return (
     <div className="min-h-[50vh] flex flex-col items-center justify-center gap-4">
-      <p className="font-mono text-sm text-error">
+      <p className="font-mono text-xs text-error">
         Failed to load projects: {message}
       </p>
       <button
         type="button"
         onClick={onRetry}
-        className="h-8 px-4 bg-bg-3 text-fg-0 font-display font-bold text-xs uppercase tracking-wider transition-colors duration-100"
+        className="h-8 px-4 bg-bg-3 text-fg-0 font-display font-bold text-2xs uppercase tracking-wider transition-colors duration-100"
       >
         Retry
       </button>
@@ -117,8 +118,8 @@ function EmptyState() {
   return (
     <div className="py-12 flex flex-col gap-10">
       <div className="flex flex-col gap-5 max-w-3xl">
-        <span className="inline-flex items-center gap-2 self-start font-mono text-xs uppercase tracking-widest text-accent">
-          <span className="w-1.5 h-1.5 bg-accent animate-pulse" aria-hidden />
+        <span className="inline-flex items-center gap-2 self-start font-mono text-2xs uppercase tracking-widest text-brand">
+          <span className="w-1.5 h-1.5 bg-brand animate-pulse" aria-hidden />
           DEBUG_CONSOLE · idle
         </span>
 
@@ -129,7 +130,7 @@ function EmptyState() {
           apiKey: <span className="text-error">undefined</span>.
         </h2>
 
-        <p className="font-body text-md leading-relaxed text-fg-1 max-w-[62ch]">
+        <p className="font-body text-base leading-relaxed text-fg-1 max-w-[62ch]">
           The SDK is waiting for a project. Create one to get an API key, drop
           it into your init, and the next uncaught error lands here with a
           30-second replay attached.
@@ -141,7 +142,7 @@ function EmptyState() {
       <div className="flex items-center gap-5 flex-wrap">
         <Link
           href="/dashboard/new"
-          className="h-11 inline-flex items-center px-6 bg-accent text-accent-fg font-display font-bold text-sm uppercase tracking-wider hover:opacity-90 transition-opacity duration-100"
+          className="h-12 inline-flex items-center px-6 bg-brand text-brand-fg font-display font-bold text-xs uppercase tracking-wider hover:opacity-90 transition-opacity duration-100"
         >
           + Create project
         </Link>
@@ -149,7 +150,7 @@ function EmptyState() {
           href="https://github.com/suksham/crashpad"
           target="_blank"
           rel="noopener noreferrer"
-          className="h-11 inline-flex items-center font-mono text-sm uppercase tracking-widest text-fg-1 hover:text-fg-0 transition-colors duration-100"
+          className="h-12 inline-flex items-center font-mono text-xs uppercase tracking-widest text-fg-1 hover:text-fg-0 transition-colors duration-100"
         >
           SDK docs →
         </a>
@@ -161,12 +162,12 @@ function EmptyState() {
 function IDEPanel() {
   return (
     <div className="w-full overflow-hidden bg-bg-0">
-      <div className="h-9 flex items-stretch bg-bg-1">
+      <div className="h-8 flex items-stretch bg-bg-1">
         <IDETab label="crashpad.config.ts" active dirty />
         <IDETab label="settings.json" />
         <IDETab label="events.log" />
         <div className="flex-1" />
-        <div className="flex items-center px-4 font-mono text-xxs uppercase tracking-widest text-fg-2">
+        <div className="flex items-center px-4 font-mono text-3xs uppercase tracking-widest text-fg-2">
           LINE 4 · COL 13
         </div>
       </div>
@@ -191,14 +192,14 @@ function IDETab({
   return (
     <div
       className={clsx(
-        'flex items-center gap-2 px-4 border-r border-bg-3 font-mono text-xs',
+        'flex items-center gap-2 px-4 border-r border-bg-3 font-mono text-2xs',
         active
-          ? 'bg-bg-0 text-fg-0 border-t border-t-accent'
+          ? 'bg-bg-0 text-fg-0 border-t border-t-brand'
           : 'text-fg-2 pt-px',
       )}
     >
       <span>{label}</span>
-      {dirty && <span className="w-1.5 h-1.5 bg-accent" aria-hidden />}
+      {dirty && <span className="w-1.5 h-1.5 bg-brand" aria-hidden />}
     </div>
   );
 }
@@ -270,7 +271,7 @@ const CODE_LINES: Array<{
 
 function CodePane() {
   return (
-    <div className="py-4 font-mono text-[13px] leading-[1.8] text-fg-0">
+    <div className="py-4 font-mono text-xs leading-[1.8] text-fg-0">
       {CODE_LINES.map((line) => (
         <div
           key={line.n}
@@ -293,8 +294,8 @@ function CodePane() {
 
 function TerminalPane() {
   return (
-    <div className="p-4 border-l border-bg-2 bg-bg-void font-mono text-sm leading-[1.8]">
-      <div className="pb-3 mb-2 border-b border-bg-2 text-xxs uppercase tracking-widest text-fg-2">
+    <div className="p-4 border-l border-bg-2 bg-bg-void font-mono text-xs leading-[1.8]">
+      <div className="pb-3 mb-2 border-b border-bg-2 text-3xs uppercase tracking-widest text-fg-2">
         TERMINAL · [sdk@0.1.0]
       </div>
       <LogLine
@@ -319,9 +320,9 @@ function TerminalPane() {
       />
       <LogLine stream="api" level="info" text="0 events · 0 replays · idle" />
       <div className="flex items-center gap-1 pt-2">
-        <span className="text-accent">›</span>
+        <span className="text-brand">›</span>
         <span
-          className="w-2 h-3.5 inline-block bg-accent animate-pulse"
+          className="w-2 h-3.5 inline-block bg-brand animate-pulse"
           aria-hidden
         />
       </div>
@@ -360,7 +361,7 @@ function Sym({ children }: { children: React.ReactNode }) {
   return <span className="text-fg-0">{children}</span>;
 }
 function Fn({ children }: { children: React.ReactNode }) {
-  return <span className="text-accent">{children}</span>;
+  return <span className="text-brand">{children}</span>;
 }
 function Prop({ children }: { children: React.ReactNode }) {
   return <span className="text-fg-0">{children}</span>;
@@ -410,7 +411,7 @@ function ProjectRow({ project, zebra }: { project: Project; zebra: boolean }) {
     <li
       className={clsx(
         'group relative transition-colors duration-500',
-        isFlashing ? 'bg-accent/10' : zebra && 'bg-bg-1',
+        isFlashing ? 'bg-brand/10' : zebra && 'bg-bg-1',
       )}
     >
       <Link
@@ -419,15 +420,15 @@ function ProjectRow({ project, zebra }: { project: Project; zebra: boolean }) {
       >
         <span className="w-2 h-2 shrink-0 bg-status-open" aria-hidden />
 
-        <span className="flex-1 min-w-0 truncate font-mono font-bold text-base leading-tight text-fg-0 group-hover:text-accent transition-colors duration-100">
+        <span className="flex-1 min-w-0 truncate font-mono font-bold text-sm leading-tight text-fg-0 group-hover:text-brand transition-colors duration-100">
           {project.name}
         </span>
 
-        <span className="hidden md:block w-24 shrink-0 font-mono text-xxs uppercase tracking-widest text-fg-2">
+        <span className="hidden md:block w-24 shrink-0 font-mono text-3xs uppercase tracking-widest text-fg-2">
           {formatRelative(project.createdAt)}
         </span>
 
-        <div className="hidden lg:flex items-center gap-3 w-52 shrink-0 font-mono text-sm">
+        <div className="hidden lg:flex items-center gap-3 w-52 shrink-0 font-mono text-xs">
           <span className="flex-1 truncate text-fg-0">
             {maskApiKey(project.apiKey)}
           </span>
@@ -436,8 +437,8 @@ function ProjectRow({ project, zebra }: { project: Project; zebra: boolean }) {
             onClick={handleCopy}
             aria-label="Copy API key"
             className={clsx(
-              'shrink-0 px-2 h-6 font-mono text-xxs uppercase tracking-widest transition-colors duration-100 hover:text-fg-0',
-              copied ? 'text-accent' : 'text-fg-2',
+              'shrink-0 px-2 h-6 font-mono text-3xs uppercase tracking-widest transition-colors duration-100 hover:text-fg-0',
+              copied ? 'text-brand' : 'text-fg-2',
             )}
           >
             {copied ? 'Copied' : 'Copy'}
@@ -448,33 +449,11 @@ function ProjectRow({ project, zebra }: { project: Project; zebra: boolean }) {
           <ArrowRight
             size={14}
             strokeWidth={1.75}
-            className="text-fg-2 group-hover:text-accent group-hover:translate-x-0.5 transition-all duration-100"
+            className="text-fg-2 group-hover:text-brand group-hover:translate-x-0.5 transition-all duration-100"
             aria-hidden
           />
         </div>
       </Link>
     </li>
   );
-}
-
-function maskApiKey(k: string): string {
-  if (!k) return '—';
-  const prefix = k.startsWith('cp_') ? 'cp_' : '';
-  const tail = k.slice(-4);
-  return `${prefix}${'•'.repeat(12)}${tail}`;
-}
-
-function formatRelative(iso: string): string {
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return '—';
-  const diff = Date.now() - then;
-  const s = Math.floor(diff / 1000);
-  if (s < 60) return `${s}s ago`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  const d = Math.floor(h / 24);
-  if (d < 30) return `${d}d ago`;
-  return new Date(iso).toLocaleDateString();
 }

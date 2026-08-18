@@ -96,7 +96,10 @@ export const DockedPlayer = forwardRef<DockedPlayerHandle, Props>(
     const [speed, setSpeed] = useState<Speed>(1);
     const [scale, setScale] = useState(1);
 
-    const recordedDims = useMemo(() => extractRecordedDims(rrwebData), [rrwebData]);
+    const recordedDims = useMemo(
+      () => extractRecordedDims(rrwebData),
+      [rrwebData],
+    );
     const clicks = useMemo(() => extractClicks(rrwebData), [rrwebData]);
 
     useLayoutEffect(() => {
@@ -136,8 +139,6 @@ export const DockedPlayer = forwardRef<DockedPlayerHandle, Props>(
 
       replayerRef.current = replayer;
       replayer.on('finish', () => setPlaying(false));
-      // Imperative init — Replayer must bind to the mounted host div, so ready
-      // flips once per rrwebData identity, not per render.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setReady(true);
       setCurrentMs(0);
@@ -223,7 +224,7 @@ export const DockedPlayer = forwardRef<DockedPlayerHandle, Props>(
           )}
           onClick={ready ? togglePlay : undefined}
         >
-          <div className="pointer-events-none absolute left-3 top-3 z-10 inline-flex items-center gap-1.5 h-6 px-2 bg-[rgba(239,68,68,0.12)] text-[color:var(--color-error)] font-mono text-[10px] font-bold uppercase tracking-widest">
+          <div className="pointer-events-none absolute left-3 top-3 z-10 inline-flex items-center gap-1.5 h-6 px-2 bg-[rgba(239,68,68,0.12)] text-[color:var(--color-error)] font-mono text-3xs font-bold uppercase tracking-widest">
             <span
               className={clsx(
                 'w-1.5 h-1.5 bg-[color:var(--color-error)]',
@@ -279,25 +280,25 @@ export const DockedPlayer = forwardRef<DockedPlayerHandle, Props>(
             )}
           </div>
           {ready && !playing && (
-            <div className="pointer-events-none absolute right-3 top-3 z-10 inline-flex items-center gap-1.5 h-6 px-2 bg-bg-0/80 text-fg-2 font-mono text-[10px] font-bold uppercase tracking-widest">
+            <div className="pointer-events-none absolute right-3 top-3 z-10 inline-flex items-center gap-1.5 h-6 px-2 bg-bg-0/80 text-fg-2 font-mono text-3xs font-bold uppercase tracking-widest">
               <span className="w-1.5 h-1.5 bg-fg-2" aria-hidden />
               PAUSED
             </div>
           )}
           {!ready && (
-            <div className="absolute inset-0 flex items-center justify-center font-mono text-xs uppercase tracking-widest text-fg-2 pointer-events-none">
+            <div className="absolute inset-0 flex items-center justify-center font-mono text-2xs uppercase tracking-widest text-fg-2 pointer-events-none">
               Loading replay...
             </div>
           )}
         </div>
 
-        <div className="h-11 bg-bg-1 border-t border-border-ghost px-3 flex items-center gap-3">
+        <div className="h-12 bg-bg-1 border-t border-border-ghost px-3 flex items-center gap-3">
           <button
             type="button"
             onClick={togglePlay}
             aria-label={playing ? 'Pause' : 'Play'}
             disabled={!ready}
-            className="w-6 h-6 flex items-center justify-center text-accent hover:text-accent-hover transition-colors duration-100 disabled:opacity-50"
+            className="w-6 h-6 flex items-center justify-center text-brand hover:opacity-80 transition-opacity duration-100 disabled:opacity-50"
           >
             {playing ? (
               <Pause size={14} strokeWidth={2} />
@@ -315,7 +316,7 @@ export const DockedPlayer = forwardRef<DockedPlayerHandle, Props>(
             disabled={!ready}
           />
 
-          <span className="font-mono text-[11px] tabular-nums text-fg-1 shrink-0 whitespace-nowrap">
+          <span className="font-mono text-2xs tabular-nums text-fg-1 shrink-0 whitespace-nowrap">
             {formatTime(currentMs)} / {formatTime(durationMs)}
           </span>
 
@@ -326,8 +327,8 @@ export const DockedPlayer = forwardRef<DockedPlayerHandle, Props>(
                 type="button"
                 onClick={() => changeSpeed(s)}
                 className={clsx(
-                  'h-6 px-1.5 font-mono text-[11px] tabular-nums transition-colors duration-100',
-                  speed === s ? 'text-accent' : 'text-fg-2 hover:text-fg-0',
+                  'h-6 px-1.5 font-mono text-2xs tabular-nums transition-colors duration-100',
+                  speed === s ? 'text-brand' : 'text-fg-2 hover:text-fg-0',
                 )}
               >
                 {s}x
@@ -363,7 +364,7 @@ function ScrubBar({
         aria-hidden
       />
       <div
-        className="absolute left-0 top-1/2 h-[3px] -translate-y-1/2 bg-accent"
+        className="absolute left-0 top-1/2 h-[3px] -translate-y-1/2 bg-brand"
         style={{ width: `${pct}%` }}
         aria-hidden
       />
@@ -394,7 +395,7 @@ function ScrubBar({
         onChange={onChange}
         disabled={disabled}
         aria-label="Replay scrub"
-        className="relative w-full h-6 appearance-none bg-transparent cursor-pointer disabled:cursor-not-allowed [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-accent [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-2 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:bg-accent [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:cursor-pointer"
+        className="relative w-full h-6 appearance-none bg-transparent cursor-pointer disabled:cursor-not-allowed [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-brand [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-2 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:bg-brand [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:cursor-pointer"
       />
     </div>
   );

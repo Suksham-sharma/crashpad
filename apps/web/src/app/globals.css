@@ -1,9 +1,6 @@
 @import 'tailwindcss';
 
-/* Design tokens. Tailwind v4 exposes these as utility classes (bg-bg-void,
-   text-fg-0, etc). */
 @theme {
-  /* Tonal depth scale — deepest to brightest */
   --color-bg-void: #0a0a0a;
   --color-bg-0: #0e0e0e;
   --color-bg-1: #131313;
@@ -12,60 +9,81 @@
   --color-bg-4: #2a2a2a;
   --color-bg-5: #353534;
 
-  /* Text */
   --color-fg-0: #fafafa;
   --color-fg-1: #a1a1a1;
   --color-fg-2: #8a8a8a;
 
-  /* Borders */
   --color-border-ghost: rgba(88, 66, 55, 0.15);
   --color-border-strong: #353534;
 
-  /* Accent */
-  --color-accent: #f97316;
-  --color-accent-hover: #ffdbca;
-  --color-accent-fg: #552100;
-  --color-accent-muted: rgba(249, 115, 22, 0.08);
+  --color-brand: #f97316;
+  --color-brand-fg: #552100;
+  --color-brand-muted: rgba(249, 115, 22, 0.08);
 
-  /* Status */
   --color-status-open: #f97316;
   --color-status-resolved: #22c55e;
   --color-status-ignored: #a1a1a1;
   --color-error: #ef4444;
   --color-warning: #eab308;
 
-  /* Typography — 3 families locked after Stitch mockup review.
-     next/font injects the optimized copy as --font-*-loaded in layout.tsx;
-     we reference those first so preload + subsetting benefits apply, with
-     the plain name as a fallback for first paint / SSR edge cases. */
   --font-display:
     var(--font-display-loaded), 'Space Grotesk', system-ui, sans-serif;
   --font-body: var(--font-body-loaded), 'Inter', system-ui, sans-serif;
   --font-mono:
     var(--font-mono-loaded), 'JetBrains Mono', 'SF Mono', Menlo, monospace;
 
-  /* Font sizes */
-  --text-xxs: 10px;
-  --text-xs: 11px;
-  --text-sm: 12px;
-  --text-base: 14px;
-  --text-md: 16px;
-  --text-lg: 20px;
-  --text-xl: 32px;
+  --text-3xs: 10px;
+  --text-2xs: 11px;
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-base: 16px;
+  --text-lg: 18px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+  --text-3xl: 32px;
 
-  /* Radius — ZERO everywhere, no exceptions */
   --radius-none: 0px;
+  --radius-xs: 0px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-2xl: 0px;
+  --radius-3xl: 0px;
+  --radius-4xl: 0px;
   --radius-full: 9999px;
 
-  /* Motion */
   --duration-instant: 100ms;
+
+  --nav-height: 60px;
+
+  --color-background: var(--color-bg-void);
+  --color-foreground: var(--color-fg-0);
+  --color-card: var(--color-bg-0);
+  --color-card-foreground: var(--color-fg-0);
+  --color-popover: var(--color-bg-1);
+  --color-popover-foreground: var(--color-fg-0);
+  --color-primary: var(--color-brand);
+  --color-primary-foreground: var(--color-brand-fg);
+  --color-secondary: var(--color-bg-3);
+  --color-secondary-foreground: var(--color-fg-0);
+  --color-muted: var(--color-bg-2);
+  --color-muted-foreground: var(--color-fg-2);
+  --color-accent: var(--color-bg-3);
+  --color-accent-foreground: var(--color-fg-0);
+  --color-destructive: var(--color-error);
+  --color-destructive-foreground: var(--color-fg-0);
+  --color-border: var(--color-border-ghost);
+  --color-input: var(--color-bg-3);
+  --color-ring: var(--color-brand);
+  --radius: 0px;
 }
 
 html {
   background: var(--color-bg-void);
   color: var(--color-fg-0);
   font-family: var(--font-body);
-  font-size: var(--text-base);
+  font-size: 14px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -75,7 +93,6 @@ body {
   color: var(--color-fg-0);
 }
 
-/* Scrollbars — thin, muted, always-visible on dark */
 ::-webkit-scrollbar {
   width: 4px;
   height: 4px;
@@ -87,24 +104,19 @@ body {
   background: var(--color-bg-5);
 }
 
-/* Selection — orange tint, dark text */
 ::selection {
-  background: var(--color-accent);
-  color: var(--color-accent-fg);
+  background: var(--color-brand);
+  color: var(--color-brand-fg);
 }
 
-/* Focus rings — sharp 1px accent inset, keyboard-only.
-   Skip elements with tabindex="-1" (programmatically-focused containers like
-   Radix Dialog.Content) — they get focused but shouldn't show a visible ring. */
 :focus-visible:not([tabindex='-1']) {
-  outline: 1px solid var(--color-accent);
+  outline: 1px solid var(--color-brand);
   outline-offset: 0;
 }
 :focus:not(:focus-visible) {
   outline: none;
 }
 
-/* Shimmer bar — used by the "Listening for events..." polling indicator. */
 @keyframes shimmer {
   0% {
     transform: translateX(-100%);
@@ -114,7 +126,6 @@ body {
   }
 }
 
-/* Respect reduced motion — disable the decorative animations, keep hover transitions */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

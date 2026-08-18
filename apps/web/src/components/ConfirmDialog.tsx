@@ -29,8 +29,8 @@ const TONE: Record<
 > = {
   info: {
     Icon: Info,
-    iconClass: 'text-accent',
-    confirmBgClass: 'bg-accent text-accent-fg',
+    iconClass: 'text-brand',
+    confirmBgClass: 'bg-brand text-brand-fg',
   },
   success: {
     Icon: CircleCheck,
@@ -79,12 +79,12 @@ export function ConfirmDialog({
           className={clsx('shrink-0', iconClass)}
           aria-hidden
         />
-        <span className="font-display font-bold text-[20px] leading-none tracking-[-0.015em] text-fg-0 truncate">
+        <span className="font-display font-bold text-xl leading-none tracking-[-0.015em] text-fg-0 truncate">
           {title}
         </span>
       </ModalHeader>
       <ModalBody>
-        <div className="font-body text-[15px] leading-[1.65] text-fg-1">
+        <div className="font-body text-sm leading-[1.65] text-fg-1">
           {description}
         </div>
       </ModalBody>
@@ -94,7 +94,7 @@ export function ConfirmDialog({
           type="button"
           onClick={onClose}
           disabled={pending}
-          className="flex-1 h-14 bg-bg-2 text-fg-0 font-display font-bold text-[13px] uppercase tracking-wider border-r border-bg-3 hover:bg-bg-3 transition-colors duration-100 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="flex-1 h-14 bg-bg-2 text-fg-0 font-display font-bold text-xs uppercase tracking-wider border-r border-bg-3 hover:bg-bg-3 transition-colors duration-100 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {cancelLabel}
         </button>
@@ -103,7 +103,7 @@ export function ConfirmDialog({
           onClick={onConfirm}
           disabled={pending}
           className={clsx(
-            'flex-1 h-14 font-display font-bold text-[13px] uppercase tracking-wider hover:opacity-90 transition-opacity duration-100 disabled:opacity-40 disabled:cursor-not-allowed',
+            'flex-1 h-14 font-display font-bold text-xs uppercase tracking-wider hover:opacity-90 transition-opacity duration-100 disabled:opacity-40 disabled:cursor-not-allowed',
             confirmBgClass,
           )}
         >

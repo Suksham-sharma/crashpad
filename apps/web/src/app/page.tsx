@@ -33,10 +33,10 @@ export default function LandingPage() {
     <main className="min-h-screen flex flex-col items-center justify-center px-6">
       <div className="max-w-md w-full flex flex-col items-center gap-8">
         <div className="flex flex-col items-center gap-3">
-          <span className="font-display font-bold text-lg uppercase tracking-tight text-accent">
+          <span className="font-display font-bold text-xl uppercase tracking-tight text-brand">
             CRASHPAD
           </span>
-          <p className="font-body text-sm text-center leading-relaxed text-fg-1">
+          <p className="font-body text-xs text-center leading-relaxed text-fg-1">
             The debugger that watches your users crash.
           </p>
         </div>
@@ -45,12 +45,12 @@ export default function LandingPage() {
           type="button"
           onClick={handleSignIn}
           disabled={buttonDisabled}
-          className="w-full h-10 px-4 bg-accent text-accent-fg font-display font-bold text-xs uppercase tracking-wider transition-colors duration-100 disabled:opacity-60 disabled:cursor-not-allowed"
+          className="w-full h-10 px-4 bg-brand text-brand-fg font-display font-bold text-2xs uppercase tracking-wider transition-colors duration-100 disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {buttonLabel}
         </button>
 
-        <p className="font-mono text-xxs uppercase tracking-widest text-fg-2">
+        <p className="font-mono text-3xs uppercase tracking-widest text-fg-2">
           v0.0.1 · scaffold
         </p>
       </div>

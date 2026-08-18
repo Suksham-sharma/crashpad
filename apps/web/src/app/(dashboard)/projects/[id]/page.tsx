@@ -16,7 +16,6 @@ import {
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import { ApiError } from '@/lib/api';
 import { useCopy } from '@/lib/use-copy';
 import {
   useProjectIssues,
@@ -27,6 +26,11 @@ import {
 } from '@/queries/issues';
 import { useProject, type Project } from '@/queries/projects';
 import { useProjectStream } from '@/queries/use-project-stream';
+import { formatError, formatRelative, maskApiKey } from '@/lib/format';
+import { PageError } from '@/components/patterns/PageError';
+import { PageLoading } from '@/components/patterns/PageLoading';
+
+const ERR = { notFound: 'Project not found.' };
 
 export default function ProjectPage() {
   const { id } = useParams<{ id: string }>();
@@ -49,18 +53,14 @@ export default function ProjectPage() {
     q: debouncedQ,
     since,
   });
-  // SSE invalidates the issue list when new events ingest for this project.
-  // Always on: gating this behind the onboarding button meant any project with
-  // at least one issue never subscribed, so live updates silently stopped
-  // working after the first event.
   useProjectStream(id, true);
 
-  if (projectQuery.isPending) return <PageLoading />;
+  if (projectQuery.isPending) return <PageLoading label="Loading project" />;
 
   if (projectQuery.isError) {
     return (
       <PageError
-        message={formatError(projectQuery.error)}
+        message={formatError(projectQuery.error, ERR)}
         onRetry={() => {
           void projectQuery.refetch();
         }}
@@ -69,7 +69,8 @@ export default function ProjectPage() {
   }
 
   const project = projectQuery.data;
-  if (!project) return <PageError message="Project not found." />;
+  if (!project)
+    return <PageError message="Project not found." backHref="/dashboard" />;
 
   const filtersDirty =
     debouncedQ.length > 0 || since !== undefined || kind !== undefined;
@@ -122,7 +123,7 @@ function Body({
   if (issuesQuery.isError) {
     return (
       <PageError
-        message={formatError(issuesQuery.error)}
+        message={formatError(issuesQuery.error, ERR)}
         onRetry={() => {
           void issuesQuery.refetch();
         }}
@@ -130,14 +131,12 @@ function Body({
     );
   }
 
-  // First-ever load: no cached data yet. Full-page skeleton, no FilterBar.
   if (!issuesQuery.data) {
     return <IssuesSkeleton />;
   }
 
   const { issues, total } = issuesQuery.data;
 
-  // Onboarding state — only when we know for sure there's nothing.
   if (
     status === 'open' &&
     total === 0 &&
@@ -185,23 +184,23 @@ function ProjectHeader({ project }: { project: Project }) {
       <div className="flex items-center gap-3 min-w-0">
         <Link
           href="/dashboard"
-          className="font-mono text-xs uppercase tracking-widest text-fg-2 hover:text-fg-0 transition-colors duration-100"
+          className="font-mono text-2xs uppercase tracking-widest text-fg-2 hover:text-fg-0 transition-colors duration-100"
         >
           projects
         </Link>
-        <span className="font-mono text-sm text-fg-2" aria-hidden>
+        <span className="font-mono text-xs text-fg-2" aria-hidden>
           /
         </span>
-        <span className="font-mono text-md font-bold text-fg-0 truncate">
+        <span className="font-mono text-base font-bold text-fg-0 truncate">
           {project.name}
         </span>
       </div>
       <div className="flex items-center gap-4 shrink-0">
         <div className="flex items-center gap-2">
-          <span className="hidden sm:inline font-mono text-xs uppercase tracking-widest text-fg-2">
+          <span className="hidden sm:inline font-mono text-2xs uppercase tracking-widest text-fg-2">
             API KEY
           </span>
-          <span className="font-mono text-base text-fg-1 tabular-nums">
+          <span className="font-mono text-sm text-fg-1 tabular-nums">
             {maskApiKey(project.apiKey)}
           </span>
           <button
@@ -210,7 +209,7 @@ function ProjectHeader({ project }: { project: Project }) {
             aria-label={copied ? 'API key copied' : 'Copy API key'}
             className={clsx(
               'p-1 transition-colors duration-100 hover:text-fg-0',
-              copied ? 'text-accent' : 'text-fg-2',
+              copied ? 'text-brand' : 'text-fg-2',
             )}
           >
             {copied ? (
@@ -223,7 +222,7 @@ function ProjectHeader({ project }: { project: Project }) {
         <span className="hidden lg:inline h-4 w-px bg-bg-3" aria-hidden />
         <Link
           href={`/projects/${project.id}/settings`}
-          className="hidden lg:inline-flex items-center gap-1.5 font-mono text-xs uppercase tracking-widest text-fg-1 hover:text-accent transition-colors duration-100"
+          className="hidden lg:inline-flex items-center gap-1.5 font-mono text-2xs uppercase tracking-widest text-fg-1 hover:text-brand transition-colors duration-100"
         >
           <Settings size={14} strokeWidth={1.75} />
           Settings
@@ -237,14 +236,14 @@ function WaitingState({ project }: { project: Project }) {
   return (
     <section className="max-w-[720px] mx-auto px-6 pt-16 pb-24 flex flex-col items-center">
       <div className="flex flex-col items-center text-center mb-10 gap-5">
-        <span className="inline-flex items-center gap-2 h-7 px-3 bg-accent-muted text-accent font-mono text-xs font-bold uppercase tracking-widest">
-          <span className="w-1.5 h-1.5 bg-accent animate-pulse" aria-hidden />
+        <span className="inline-flex items-center gap-2 h-7 px-3 bg-brand-muted text-brand font-mono text-2xs font-bold uppercase tracking-widest">
+          <span className="w-1.5 h-1.5 bg-brand animate-pulse" aria-hidden />
           PROJECT CREATED
         </span>
-        <h2 className="font-display font-bold text-xl leading-[1.1] tracking-[-0.02em] text-fg-0">
+        <h2 className="font-display font-bold text-3xl leading-[1.1] tracking-[-0.02em] text-fg-0">
           Waiting for your first event...
         </h2>
-        <p className="font-body text-md leading-relaxed text-fg-1 max-w-md">
+        <p className="font-body text-base leading-relaxed text-fg-1 max-w-md">
           Install the snippet below in your app and trigger an error. I&apos;ll
           show up here the second it lands.
         </p>
@@ -260,8 +259,7 @@ function WaitingState({ project }: { project: Project }) {
 
       <InContextReveal apiKey={project.apiKey} />
 
-      {/* The stream is live from page load, so this is a status readout, not
-          a thing to opt into. */}
+      {}
       <div className="w-full mb-12 mt-4">
         <PollingIndicator />
       </div>
@@ -283,11 +281,11 @@ function SnippetBlock({
   return (
     <div className="w-full mb-4">
       <div className="mb-2 flex items-center justify-between">
-        <span className="font-mono text-xxs uppercase tracking-widest text-fg-2">
+        <span className="font-mono text-3xs uppercase tracking-widest text-fg-2">
           {label}
         </span>
         {filename && (
-          <span className="font-mono text-xxs text-fg-2">{filename}</span>
+          <span className="font-mono text-3xs text-fg-2">{filename}</span>
         )}
       </div>
       {children}
@@ -336,9 +334,9 @@ function InstallTabs() {
               type="button"
               onClick={() => setPm(p)}
               className={clsx(
-                'h-10 px-4 font-mono text-xxs uppercase tracking-widest transition-colors duration-100',
+                'h-10 px-4 font-mono text-3xs uppercase tracking-widest transition-colors duration-100',
                 p === pm
-                  ? 'text-accent border-b-2 border-accent bg-bg-0/40'
+                  ? 'text-brand border-b-2 border-brand bg-bg-0/40'
                   : 'text-fg-2 hover:text-fg-0',
               )}
             >
@@ -351,11 +349,11 @@ function InstallTabs() {
           onCopy={() => void copy(cmd, 'Command copied')}
         />
       </div>
-      <pre className="m-0 p-5 bg-bg-0 font-mono text-base leading-relaxed overflow-x-auto">
+      <pre className="m-0 p-5 bg-bg-0 font-mono text-sm leading-relaxed overflow-x-auto">
         <code className="text-fg-0">
-          <span className="text-accent">{pm}</span>{' '}
+          <span className="text-brand">{pm}</span>{' '}
           <span className="text-fg-1">{subcommand}</span>{' '}
-          <span className="text-accent">{pkg}</span>
+          <span className="text-brand">{pkg}</span>
         </code>
       </pre>
     </div>
@@ -379,7 +377,7 @@ Crashpad.init({
           onCopy={() => void copy(snippet, 'Snippet copied')}
         />
       </div>
-      <pre className="m-0 p-5 bg-bg-0 font-mono text-base leading-relaxed overflow-x-auto whitespace-pre">
+      <pre className="m-0 p-5 bg-bg-0 font-mono text-sm leading-relaxed overflow-x-auto whitespace-pre">
         <code>
           <span className="text-fg-1">import</span>{' '}
           <span className="text-fg-0">{'{ Crashpad }'}</span>{' '}
@@ -391,7 +389,7 @@ Crashpad.init({
           {'\n\n'}
           <span className="text-fg-0">Crashpad</span>
           <span className="text-fg-1">.</span>
-          <span className="text-accent">init</span>
+          <span className="text-brand">init</span>
           <span className="text-fg-1">({'{'}</span>
           {'\n  '}
           <span className="text-fg-0">apiKey</span>
@@ -485,7 +483,7 @@ function InContextReveal({ apiKey }: { apiKey: string }) {
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="inline-flex items-center gap-1.5 font-mono text-xs uppercase tracking-widest text-fg-1 hover:text-fg-0 transition-colors duration-100"
+        className="inline-flex items-center gap-1.5 font-mono text-2xs uppercase tracking-widest text-fg-1 hover:text-fg-0 transition-colors duration-100"
       >
         {open ? (
           <ChevronDown size={14} strokeWidth={1.75} />
@@ -504,9 +502,9 @@ function InContextReveal({ apiKey }: { apiKey: string }) {
                   type="button"
                   onClick={() => setFw(f)}
                   className={clsx(
-                    'h-10 px-4 shrink-0 font-mono text-xxs uppercase tracking-widest transition-colors duration-100',
+                    'h-10 px-4 shrink-0 font-mono text-3xs uppercase tracking-widest transition-colors duration-100',
                     f === fw
-                      ? 'text-accent border-b-2 border-accent bg-bg-0/40'
+                      ? 'text-brand border-b-2 border-brand bg-bg-0/40'
                       : 'text-fg-2 hover:text-fg-0',
                   )}
                 >
@@ -519,10 +517,10 @@ function InContextReveal({ apiKey }: { apiKey: string }) {
               onCopy={() => void copy(snippet, 'Snippet copied')}
             />
           </div>
-          <div className="px-4 py-2 bg-bg-1 border-b border-border-ghost font-mono text-xxs text-fg-2">
+          <div className="px-4 py-2 bg-bg-1 border-b border-border-ghost font-mono text-3xs text-fg-2">
             {FRAMEWORK_FILES[fw]}
           </div>
-          <pre className="m-0 p-5 bg-bg-0 font-mono text-base leading-relaxed overflow-x-auto">
+          <pre className="m-0 p-5 bg-bg-0 font-mono text-sm leading-relaxed overflow-x-auto">
             <code className="text-fg-0 whitespace-pre">{snippet}</code>
           </pre>
         </div>
@@ -543,8 +541,8 @@ function CopyButton({
       type="button"
       onClick={onCopy}
       className={clsx(
-        'inline-flex items-center gap-2 px-4 h-10 font-mono text-xxs uppercase tracking-widest transition-colors duration-100 hover:text-fg-0',
-        copied ? 'text-accent' : 'text-fg-2',
+        'inline-flex items-center gap-2 px-4 h-10 font-mono text-3xs uppercase tracking-widest transition-colors duration-100 hover:text-fg-0',
+        copied ? 'text-brand' : 'text-fg-2',
       )}
     >
       {copied ? (
@@ -562,18 +560,18 @@ function PollingIndicator() {
   return (
     <div>
       <div className="relative h-px bg-border-ghost mb-4 overflow-hidden">
-        <div className="absolute inset-y-0 w-1/3 bg-gradient-to-r from-transparent via-accent to-transparent animate-[shimmer_2.5s_infinite_linear]" />
+        <div className="absolute inset-y-0 w-1/3 bg-gradient-to-r from-transparent via-brand to-transparent animate-[shimmer_2.5s_infinite_linear]" />
       </div>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <span className="w-1.5 h-1.5 bg-accent animate-pulse" aria-hidden />
-          <span className="font-body text-sm text-fg-1">
+          <span className="w-1.5 h-1.5 bg-brand animate-pulse" aria-hidden />
+          <span className="font-body text-xs text-fg-1">
             Listening for events...
           </span>
         </div>
-        <div className="flex items-center gap-2 font-mono text-xs">
-          <span className="text-accent tabular-nums">{elapsed}</span>
-          <span className="text-xxs uppercase tracking-widest text-fg-2">
+        <div className="flex items-center gap-2 font-mono text-2xs">
+          <span className="text-brand tabular-nums">{elapsed}</span>
+          <span className="text-3xs uppercase tracking-widest text-fg-2">
             ELAPSED
           </span>
         </div>
@@ -587,28 +585,28 @@ function Troubleshooter() {
     <div className="w-full p-5 bg-bg-2 border-l-2 border-bg-4">
       <div className="flex items-center gap-3 mb-4">
         <CircleAlert size={16} strokeWidth={1.75} className="text-fg-1" />
-        <h3 className="font-display font-bold text-md tracking-[-0.01em] text-fg-0">
+        <h3 className="font-display font-bold text-base tracking-[-0.01em] text-fg-0">
           Not seeing anything?
         </h3>
       </div>
-      <ul className="flex flex-col gap-4 font-body text-sm text-fg-1">
+      <ul className="flex flex-col gap-4 font-body text-xs text-fg-1">
         <TroubleshootItem>
           Check your{' '}
-          <code className="font-mono text-xs bg-bg-4 px-1.5 py-0.5 text-fg-0">
+          <code className="font-mono text-2xs bg-bg-4 px-1.5 py-0.5 text-fg-0">
             apiKey
           </code>{' '}
           matches the one shown above.
         </TroubleshootItem>
         <TroubleshootItem>
           Make sure{' '}
-          <code className="font-mono text-xs bg-bg-4 px-1.5 py-0.5 text-fg-0">
+          <code className="font-mono text-2xs bg-bg-4 px-1.5 py-0.5 text-fg-0">
             Crashpad.init()
           </code>{' '}
           runs before the error fires. Top of your app entry is safest.
         </TroubleshootItem>
         <TroubleshootItem>
           <p className="mb-2">Throw a manual test error from your console:</p>
-          <pre className="m-0 p-3 bg-bg-0 font-mono text-xs text-fg-0 overflow-x-auto">
+          <pre className="m-0 p-3 bg-bg-0 font-mono text-2xs text-fg-0 overflow-x-auto">
             <code>throw new Error(&apos;hello crashpad&apos;)</code>
           </pre>
         </TroubleshootItem>
@@ -620,7 +618,7 @@ function Troubleshooter() {
 function TroubleshootItem({ children }: { children: React.ReactNode }) {
   return (
     <li className="flex items-start gap-3">
-      <span className="w-1.5 h-1.5 shrink-0 mt-1.5 bg-accent" aria-hidden />
+      <span className="w-1.5 h-1.5 shrink-0 mt-1.5 bg-brand" aria-hidden />
       <div className="flex-1 min-w-0">{children}</div>
     </li>
   );
@@ -638,15 +636,6 @@ const TIME_TABS: { value: IssueTimeWindow | undefined; label: string }[] = [
   { value: '30d', label: '30d' },
   { value: undefined, label: 'All' },
 ];
-
-// Kind is one toggle, not a chip per value. Three kind chips put a second
-// control labelled "All" beside the time range's "All" and pushed the row to
-// six chips. Collapsing to "Silent only" keeps the row at four and leaves the
-// status dots as the only coloured vocabulary in the bar.
-//
-// Trade-off: errors-only is not reachable from the UI. `kind=error` still works
-// on the API — bring back a third state here if filtering to just exceptions
-// turns out to matter.
 
 function FilterBar({
   status,
@@ -679,7 +668,7 @@ function FilterBar({
             <Search
               size={14}
               strokeWidth={1.75}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-2 group-focus-within:text-accent transition-colors duration-100 pointer-events-none"
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-fg-2 group-focus-within:text-brand transition-colors duration-100 pointer-events-none"
               aria-hidden
             />
             <input
@@ -687,7 +676,7 @@ function FilterBar({
               value={searchInput}
               onChange={(e) => onSearchInput(e.target.value)}
               placeholder="Search by title…"
-              className="w-full h-10 pl-9 pr-9 bg-bg-1 border border-bg-3 font-mono text-sm text-fg-0 placeholder:text-fg-2 hover:border-bg-4 focus:outline-none focus:border-accent focus:bg-bg-0 transition-colors duration-100"
+              className="w-full h-10 pl-9 pr-9 bg-bg-1 border border-bg-3 font-mono text-xs text-fg-0 placeholder:text-fg-2 hover:border-bg-4 focus:outline-none focus:border-brand focus:bg-bg-0 transition-colors duration-100"
             />
             {searchInput && (
               <button
@@ -710,9 +699,9 @@ function FilterBar({
                   type="button"
                   onClick={() => onSince(tab.value)}
                   className={clsx(
-                    'h-10 inline-flex items-center px-4 font-mono text-sm uppercase tracking-widest transition-colors duration-100',
+                    'h-10 inline-flex items-center px-4 font-mono text-xs uppercase tracking-widest transition-colors duration-100',
                     active
-                      ? 'bg-accent-muted text-fg-0'
+                      ? 'bg-brand-muted text-fg-0'
                       : 'text-fg-2 hover:text-fg-1 hover:bg-bg-1',
                   )}
                 >
@@ -739,9 +728,9 @@ function FilterBar({
                   type="button"
                   onClick={() => onStatus(tab.value)}
                   className={clsx(
-                    'h-10 inline-flex items-center gap-2.5 px-4 font-mono text-sm uppercase tracking-widest transition-colors duration-100',
+                    'h-10 inline-flex items-center gap-2.5 px-4 font-mono text-xs uppercase tracking-widest transition-colors duration-100',
                     active
-                      ? 'bg-accent-muted text-fg-0'
+                      ? 'bg-brand-muted text-fg-0'
                       : 'text-fg-2 hover:text-fg-1 hover:bg-bg-1',
                   )}
                 >
@@ -764,9 +753,9 @@ function FilterBar({
               onClick={() => onKind(kind === 'signal' ? undefined : 'signal')}
               aria-pressed={kind === 'signal'}
               className={clsx(
-                'h-10 inline-flex items-center gap-2 px-4 font-mono text-sm uppercase tracking-widest transition-colors duration-100',
+                'h-10 inline-flex items-center gap-2 px-4 font-mono text-xs uppercase tracking-widest transition-colors duration-100',
                 kind === 'signal'
-                  ? 'bg-accent-muted text-fg-0'
+                  ? 'bg-brand-muted text-fg-0'
                   : 'text-fg-2 hover:text-fg-1 hover:bg-bg-1',
               )}
             >
@@ -775,7 +764,7 @@ function FilterBar({
             </button>
           </div>
           {total > 0 && (
-            <span className="font-mono text-xs uppercase tracking-widest text-fg-2 tabular-nums">
+            <span className="font-mono text-2xs uppercase tracking-widest text-fg-2 tabular-nums">
               {shown === total
                 ? `${total} ${total === 1 ? 'issue' : 'issues'}`
                 : `${shown} of ${total}`}
@@ -797,27 +786,27 @@ function IssueRow({ issue, zebra }: { issue: Issue; zebra: boolean }) {
         <div className="flex-1 min-w-0 px-6 h-14 flex items-center gap-6">
           <div className="flex-1 min-w-0 flex items-center gap-2.5">
             {issue.kind === 'signal' && (
-              <span className="shrink-0 px-1.5 py-0.5 bg-bg-3 font-mono text-xxs font-bold uppercase tracking-widest text-fg-1">
+              <span className="shrink-0 px-1.5 py-0.5 bg-bg-3 font-mono text-3xs font-bold uppercase tracking-widest text-fg-1">
                 Silent
               </span>
             )}
-            <div className="truncate font-mono font-bold text-base leading-tight text-fg-0 group-hover:text-accent transition-colors duration-100">
+            <div className="truncate font-mono font-bold text-sm leading-tight text-fg-0 group-hover:text-brand transition-colors duration-100">
               {issue.title}
             </div>
           </div>
           <div className="hidden md:flex flex-col items-end w-28 shrink-0">
-            <span className="font-mono text-xxs font-bold uppercase tracking-widest text-fg-0">
+            <span className="font-mono text-3xs font-bold uppercase tracking-widest text-fg-0">
               {issue.eventCount} {issue.eventCount === 1 ? 'event' : 'events'}
             </span>
           </div>
-          <div className="hidden sm:block w-24 shrink-0 text-right font-mono text-xxs uppercase tracking-widest text-fg-2">
+          <div className="hidden sm:block w-24 shrink-0 text-right font-mono text-3xs uppercase tracking-widest text-fg-2">
             {formatRelative(issue.lastSeen)}
           </div>
           <div className="w-6 shrink-0 flex items-center justify-end">
             <ArrowRight
               size={14}
               strokeWidth={1.75}
-              className="text-fg-2 group-hover:text-accent group-hover:translate-x-0.5 transition-all duration-100"
+              className="text-fg-2 group-hover:text-brand group-hover:translate-x-0.5 transition-all duration-100"
               aria-hidden
             />
           </div>
@@ -843,7 +832,7 @@ function EmptyForStatus({
         : 'No open issues in this window.';
   return (
     <div className="max-w-screen-2xl mx-auto px-6 py-20 text-center">
-      <p className="font-body text-sm text-fg-1">{label}</p>
+      <p className="font-body text-xs text-fg-1">{label}</p>
     </div>
   );
 }
@@ -878,45 +867,6 @@ function IssuesSkeleton() {
   );
 }
 
-function PageLoading() {
-  return (
-    <main className="min-h-[calc(100vh-60px)] flex items-center justify-center">
-      <span className="font-mono text-xxs uppercase tracking-widest text-fg-2">
-        Loading project...
-      </span>
-    </main>
-  );
-}
-
-function PageError({
-  message,
-  onRetry,
-}: {
-  message: string;
-  onRetry?: () => void;
-}) {
-  return (
-    <main className="min-h-[calc(100vh-60px)] flex flex-col items-center justify-center gap-4">
-      <p className="font-mono text-sm text-error">{message}</p>
-      {onRetry && (
-        <button
-          type="button"
-          onClick={onRetry}
-          className="h-8 px-4 bg-bg-3 text-fg-0 font-display font-bold text-xs uppercase tracking-wider hover:bg-bg-4 transition-colors duration-100"
-        >
-          Retry
-        </button>
-      )}
-      <Link
-        href="/dashboard"
-        className="font-mono text-xxs uppercase tracking-widest text-fg-2 hover:text-fg-0 transition-colors duration-100"
-      >
-        ← Back to projects
-      </Link>
-    </main>
-  );
-}
-
 function useElapsed(): string {
   const [seconds, setSeconds] = useState(0);
   useEffect(() => {
@@ -928,35 +878,4 @@ function useElapsed(): string {
     .padStart(2, '0');
   const s = (seconds % 60).toString().padStart(2, '0');
   return `${m}:${s}`;
-}
-
-function formatError(err: unknown): string {
-  if (err instanceof ApiError) {
-    if (err.status === 404) return 'Project not found.';
-    return err.message;
-  }
-  if (err instanceof Error) return err.message;
-  return 'Something went wrong.';
-}
-
-function maskApiKey(k: string): string {
-  if (!k) return '—';
-  const prefix = k.startsWith('cp_') ? 'cp_' : '';
-  const tail = k.slice(-4);
-  return `${prefix}${'•'.repeat(12)}${tail}`;
-}
-
-function formatRelative(iso: string): string {
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return '—';
-  const diff = Date.now() - then;
-  const s = Math.floor(diff / 1000);
-  if (s < 60) return `${s}s ago`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  const d = Math.floor(h / 24);
-  if (d < 30) return `${d}d ago`;
-  return new Date(iso).toLocaleDateString();
 }

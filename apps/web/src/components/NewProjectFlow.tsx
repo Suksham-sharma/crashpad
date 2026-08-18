@@ -27,9 +27,7 @@ export function NewProjectFlow({ onClose }: { onClose: () => void }) {
       setLastCreated(res.project.id);
       setProject(res.project);
       toast.success(`Created ${res.project.name}`);
-    } catch {
-      // surfaced via createProject.error below
-    }
+    } catch {}
   };
 
   const errorMessage =
@@ -87,7 +85,7 @@ function FormStep({
   return (
     <form onSubmit={onSubmit} className="flex flex-col">
       <ModalHeader onClose={onCancel}>
-        <span className="font-display font-bold text-[20px] leading-none tracking-[-0.015em] text-fg-0">
+        <span className="font-display font-bold text-xl leading-none tracking-[-0.015em] text-fg-0">
           New project
         </span>
       </ModalHeader>
@@ -96,7 +94,7 @@ function FormStep({
         <div className="flex flex-col gap-3">
           <label
             htmlFor="project-name"
-            className="font-body font-medium text-base text-fg-0"
+            className="font-body font-medium text-sm text-fg-0"
           >
             Project name
           </label>
@@ -111,9 +109,9 @@ function FormStep({
             autoComplete="off"
             spellCheck={false}
             disabled={submitting}
-            className="w-full px-4 h-12 outline-none bg-bg-0 border border-bg-3 focus:border-accent font-mono text-[15px] text-fg-0 transition-colors duration-100"
+            className="w-full px-4 h-12 outline-none bg-bg-0 border border-bg-3 focus:border-brand font-mono text-sm text-fg-0 transition-colors duration-100"
           />
-          <p className="font-body text-base text-fg-1 leading-[1.55]">
+          <p className="font-body text-sm text-fg-1 leading-[1.55]">
             Shown on your dashboard and next to every captured error.
           </p>
         </div>
@@ -121,7 +119,7 @@ function FormStep({
         {error && (
           <p
             role="alert"
-            className="font-body text-base text-error leading-[1.5]"
+            className="font-body text-sm text-error leading-[1.5]"
           >
             {error}
           </p>
@@ -133,14 +131,14 @@ function FormStep({
           type="button"
           onClick={onCancel}
           disabled={submitting}
-          className="flex-1 h-14 bg-bg-2 text-fg-0 font-display font-bold text-[13px] uppercase tracking-wider border-r border-bg-3 hover:bg-bg-3 transition-colors duration-100 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="flex-1 h-14 bg-bg-2 text-fg-0 font-display font-bold text-xs uppercase tracking-wider border-r border-bg-3 hover:bg-bg-3 transition-colors duration-100 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           Cancel
         </button>
         <button
           type="submit"
           disabled={!canSubmit}
-          className="flex-1 h-14 bg-accent text-accent-fg font-display font-bold text-[13px] uppercase tracking-wider hover:opacity-90 transition-opacity duration-100 disabled:opacity-40 disabled:cursor-not-allowed"
+          className="flex-1 h-14 bg-brand text-brand-fg font-display font-bold text-xs uppercase tracking-wider hover:opacity-90 transition-opacity duration-100 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {submitting ? 'Creating…' : 'Create project'}
         </button>
@@ -170,18 +168,18 @@ function RevealStep({ project }: { project: Project }) {
   return (
     <div className="flex flex-col">
       <ModalHeader>
-        <CircleCheck size={18} strokeWidth={2} className="text-accent" />
-        <span className="font-display font-bold text-[20px] leading-none tracking-[-0.015em] text-accent">
+        <CircleCheck size={18} strokeWidth={2} className="text-brand" />
+        <span className="font-display font-bold text-xl leading-none tracking-[-0.015em] text-brand">
           Project created
         </span>
       </ModalHeader>
 
       <ModalBody>
         <div className="flex flex-col gap-3">
-          <h2 className="font-display font-bold text-[28px] leading-[1.1] tracking-[-0.02em] text-fg-0">
+          <h2 className="font-display font-bold text-3xl leading-[1.1] tracking-[-0.02em] text-fg-0">
             {project.name}
           </h2>
-          <p className="font-body text-[15px] leading-[1.65] text-fg-1">
+          <p className="font-body text-sm leading-[1.65] text-fg-1">
             Your SDK uses this API key to identify this project. You can copy it
             again from the project list.
           </p>
@@ -189,7 +187,7 @@ function RevealStep({ project }: { project: Project }) {
 
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
-            <span className="font-body font-medium text-base text-fg-0">
+            <span className="font-body font-medium text-sm text-fg-0">
               API key
             </span>
             <CopyLink copied={copiedKey} onCopy={copyKey} label="API key" />
@@ -198,12 +196,12 @@ function RevealStep({ project }: { project: Project }) {
             onClick={selectKey}
             className={clsx(
               'px-4 py-4 cursor-text bg-bg-0 border transition-colors duration-100',
-              copiedKey ? 'border-accent' : 'border-bg-3',
+              copiedKey ? 'border-brand' : 'border-bg-3',
             )}
           >
             <code
               ref={keyRef}
-              className="block break-all select-all font-mono text-[13px] leading-[1.55] tracking-[0.01em] text-fg-0"
+              className="block break-all select-all font-mono text-xs leading-[1.55] tracking-[0.01em] text-fg-0"
             >
               {project.apiKey}
             </code>
@@ -211,10 +209,10 @@ function RevealStep({ project }: { project: Project }) {
         </div>
 
         <div className="flex flex-col gap-3">
-          <span className="font-body font-medium text-base text-fg-0">
+          <span className="font-body font-medium text-sm text-fg-0">
             SDK init
           </span>
-          <pre className="m-0 px-4 py-4 overflow-x-auto bg-bg-0 border border-bg-3 font-mono text-sm leading-[1.75]">
+          <pre className="m-0 px-4 py-4 overflow-x-auto bg-bg-0 border border-bg-3 font-mono text-xs leading-[1.75]">
             <code>
               <span className="text-fg-1">import</span>{' '}
               <span className="text-fg-0">{'{ Crashpad }'}</span>{' '}
@@ -226,7 +224,7 @@ function RevealStep({ project }: { project: Project }) {
               {'\n\n'}
               <span className="text-fg-0">Crashpad</span>
               <span className="text-fg-1">.</span>
-              <span className="text-accent">init</span>
+              <span className="text-brand">init</span>
               <span className="text-fg-1">({'{'}</span>
               {'\n  '}
               <span className="text-fg-0">apiKey</span>
@@ -252,7 +250,7 @@ function RevealStep({ project }: { project: Project }) {
       <ModalFooter>
         <Link
           href={`/projects/${project.id}`}
-          className="flex-1 h-14 inline-flex items-center justify-center gap-2 bg-accent text-accent-fg font-display font-bold text-[13px] uppercase tracking-wider hover:opacity-90 transition-opacity duration-100"
+          className="flex-1 h-14 inline-flex items-center justify-center gap-2 bg-brand text-brand-fg font-display font-bold text-xs uppercase tracking-wider hover:opacity-90 transition-opacity duration-100"
         >
           Continue to {project.name}
           <ArrowRight size={15} strokeWidth={2.25} />
@@ -276,8 +274,8 @@ function CopyLink({
       type="button"
       onClick={onCopy}
       className={clsx(
-        'inline-flex items-center gap-1.5 font-body font-medium text-sm transition-colors duration-100 hover:text-fg-0',
-        copied ? 'text-accent' : 'text-fg-1',
+        'inline-flex items-center gap-1.5 font-body font-medium text-xs transition-colors duration-100 hover:text-fg-0',
+        copied ? 'text-brand' : 'text-fg-1',
       )}
       aria-label={copied ? `${label} copied` : `Copy ${label}`}
     >

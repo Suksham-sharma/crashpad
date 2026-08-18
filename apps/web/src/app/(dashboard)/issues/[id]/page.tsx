@@ -1,16 +1,33 @@
 'use client';
 
 import clsx from 'clsx';
-import { Bell, ChevronsDown, ChevronsUp, Settings } from 'lucide-react';
+import {
+  Bell,
+  ChevronsDown,
+  ChevronsUp,
+  ExternalLink,
+  GitPullRequest,
+  Settings,
+  Sparkles,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 import {
   DockedPlayer,
   type DockedPlayerHandle,
 } from '@/components/DockedPlayer';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
-import { ApiError } from '@/lib/api';
+import {
+  isFixRunActive,
+  useFixRun,
+  useGithubApp,
+  useProjectRepo,
+  useStartFix,
+  type FixRun,
+} from '@/queries/fix';
+import { useProjectStream } from '@/queries/use-project-stream';
 import {
   useIssue,
   useUpdateIssueStatus,
@@ -23,11 +40,14 @@ import {
   type NetworkSessionEvent,
   type ResolvedFrame,
 } from '@/queries/issues';
+import { formatError, formatRelative } from '@/lib/format';
+import { PageError } from '@/components/patterns/PageError';
+import { PageLoading } from '@/components/patterns/PageLoading';
 
-type TabId = 'dom' | 'stack' | 'network' | 'console';
+const ERR = { notFound: 'Issue not found.', fallback: 'Failed to load issue.' };
 
-// Mirror of MIN_REPLAY_EVENTS in @crashpad/sdk core/capture.ts. A replay
-// shorter than this is empty by definition (just the rrweb meta event).
+type TabId = 'dom' | 'stack' | 'network' | 'console' | 'fix';
+
 const MIN_REPLAY_EVENTS = 2;
 
 export default function IssueDetailPage() {
@@ -41,11 +61,13 @@ export default function IssueDetailPage() {
     playerRef.current?.seek(ms);
   }, []);
 
-  if (query.isPending) return <PageLoading />;
+  useProjectStream(query.data?.issue.projectId ?? '', Boolean(query.data));
+
+  if (query.isPending) return <PageLoading label="Loading issue" />;
   if (query.isError) {
     return (
       <PageError
-        message={formatError(query.error)}
+        message={formatError(query.error, ERR)}
         onRetry={() => void query.refetch()}
       />
     );
@@ -54,8 +76,8 @@ export default function IssueDetailPage() {
   if (!data) return <PageError message="Issue not found." />;
 
   return (
-    <main className="h-[calc(100vh-60px)] flex flex-col overflow-hidden">
-      <IssueHeader detail={data} />
+    <main className="h-[calc(100vh-var(--nav-height))] flex flex-col overflow-hidden">
+      <IssueHeader detail={data} onOpenFix={() => setTab('fix')} />
       <IssueTitle detail={data} />
       <div className="grid grid-cols-[1fr_440px] grid-rows-[1fr] gap-px bg-border-ghost flex-1 min-h-0">
         <div className="bg-bg-0 min-w-0 min-h-0 overflow-hidden">
@@ -86,7 +108,13 @@ export default function IssueDetailPage() {
   );
 }
 
-function IssueHeader({ detail }: { detail: IssueDetail }) {
+function IssueHeader({
+  detail,
+  onOpenFix,
+}: {
+  detail: IssueDetail;
+  onOpenFix: () => void;
+}) {
   const router = useRouter();
   const { issue } = detail;
   const mutation = useUpdateIssueStatus(issue.id);
@@ -132,7 +160,7 @@ function IssueHeader({ detail }: { detail: IssueDetail }) {
 
   return (
     <div className="h-14 px-6 flex items-center justify-between gap-6 border-b border-border-ghost">
-      <div className="flex items-center gap-2 min-w-0 font-mono text-xs uppercase tracking-widest text-fg-2">
+      <div className="flex items-center gap-2 min-w-0 font-mono text-2xs uppercase tracking-widest text-fg-2">
         <Link
           href="/dashboard"
           className="hover:text-fg-0 transition-colors duration-100"
@@ -148,12 +176,14 @@ function IssueHeader({ detail }: { detail: IssueDetail }) {
           issues
         </button>
         <span className="text-fg-2">/</span>
-        <span className="text-fg-0 truncate normal-case tracking-normal text-sm">
+        <span className="text-fg-0 truncate normal-case tracking-normal text-xs">
           {issue.title}
         </span>
       </div>
 
       <div className="flex items-center gap-2 shrink-0">
+        <FixItButton issue={issue} onOpenFix={onOpenFix} />
+        <span className="hidden lg:inline h-4 w-px bg-bg-3 mx-1" aria-hidden />
         <StatusButton
           label={issue.status === 'resolved' ? 'REOPEN' : 'RESOLVE'}
           active={issue.status === 'resolved'}
@@ -222,6 +252,294 @@ function IssueHeader({ detail }: { detail: IssueDetail }) {
   );
 }
 
+function FixItButton({
+  issue,
+  onOpenFix,
+}: {
+  issue: IssueDetail['issue'];
+  onOpenFix: () => void;
+}) {
+  const run = useFixRun(issue.id);
+  const start = useStartFix(issue.id);
+  const current = run.data?.run ?? null;
+  const active = current !== null && isFixRunActive(current.status);
+
+  const onClick = () => {
+    onOpenFix();
+    if (active || start.isPending) return;
+    start.mutate(undefined, {
+      onError: (err) => toast.error(formatError(err, ERR)),
+    });
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={start.isPending}
+      className={clsx(
+        'h-8 px-3 inline-flex items-center gap-2 font-mono text-2xs font-bold uppercase tracking-widest transition-opacity duration-100 disabled:opacity-50 disabled:cursor-not-allowed',
+        active
+          ? 'border border-brand text-brand bg-brand-muted'
+          : 'bg-brand text-brand-fg hover:opacity-90',
+      )}
+    >
+      {active ? (
+        <Spinner />
+      ) : (
+        <Sparkles size={13} strokeWidth={2} aria-hidden />
+      )}
+      {active ? 'Fixing…' : 'Fix it'}
+    </button>
+  );
+}
+
+function Spinner() {
+  return (
+    <span
+      className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin"
+      aria-hidden
+    />
+  );
+}
+
+function FixPanel({ detail }: { detail: IssueDetail }) {
+  const { issue } = detail;
+  const app = useGithubApp();
+  const repo = useProjectRepo(issue.projectId);
+  const run = useFixRun(issue.id);
+  const start = useStartFix(issue.id);
+  const current = run.data?.run ?? null;
+
+  const dispatch = () =>
+    start.mutate(undefined, {
+      onError: (err) => toast.error(formatError(err, ERR)),
+    });
+
+  if (app.data && !app.data.configured) {
+    return (
+      <FixShell>
+        <FixNote>
+          Fix it is unavailable — this Crashpad server has no GitHub App
+          configured.
+        </FixNote>
+      </FixShell>
+    );
+  }
+
+  if (repo.isPending) {
+    return (
+      <FixShell>
+        <FixNote>Loading…</FixNote>
+      </FixShell>
+    );
+  }
+
+  if (!repo.data?.repoFullName) {
+    return (
+      <FixShell>
+        <FixNote>
+          No repository is connected to this project, so there is nowhere to
+          dispatch a fix.
+        </FixNote>
+        <Link
+          href={`/projects/${issue.projectId}/settings`}
+          className="h-8 px-4 inline-flex items-center w-fit bg-brand text-brand-fg font-display font-bold text-2xs uppercase tracking-widest hover:opacity-90 transition-opacity duration-100"
+        >
+          Connect a repository
+        </Link>
+      </FixShell>
+    );
+  }
+
+  return (
+    <FixShell>
+      <div className="flex items-center gap-2 font-mono text-2xs text-fg-2">
+        <span className="uppercase tracking-widest">Target</span>
+        <span className="text-fg-0">{repo.data.repoFullName}</span>
+        {repo.data.repoPrivate === false && (
+          <span className="text-warning uppercase tracking-widest">public</span>
+        )}
+      </div>
+
+      {!current ? (
+        <>
+          <FixNote>
+            Crashpad packages this issue into a bug report — the element, the
+            interaction trail, what did not happen, and the network and console
+            activity around it — and dispatches the{' '}
+            <FixCode>crashpad-fix</FixCode> workflow in your repository. The
+            agent runs in your CI, on your checkout, and opens the pull request
+            itself.
+          </FixNote>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={dispatch}
+              disabled={start.isPending}
+              className="h-8 px-4 inline-flex items-center gap-2 bg-brand text-brand-fg font-display font-bold text-2xs uppercase tracking-widest disabled:opacity-50 hover:opacity-90 transition-opacity duration-100"
+            >
+              <Sparkles size={13} strokeWidth={2} aria-hidden />
+              {start.isPending ? 'Dispatching…' : 'Run the agent'}
+            </button>
+            <BriefLink issueId={issue.id} />
+          </div>
+        </>
+      ) : (
+        <FixRunCard
+          run={current}
+          onRetry={dispatch}
+          retrying={start.isPending}
+          issueId={issue.id}
+        />
+      )}
+    </FixShell>
+  );
+}
+
+function FixRunCard({
+  run,
+  onRetry,
+  retrying,
+  issueId,
+}: {
+  run: FixRun;
+  onRetry: () => void;
+  retrying: boolean;
+  issueId: string;
+}) {
+  const active = isFixRunActive(run.status);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center gap-3">
+        <FixStatusChip status={run.status} />
+        <span className="font-mono text-2xs text-fg-2 tabular-nums">
+          started {formatRelative(run.createdAt)}
+        </span>
+      </div>
+
+      {run.status === 'pending' && (
+        <FixNote>Dispatching the workflow to {run.repoFullName}…</FixNote>
+      )}
+      {run.status === 'running' && (
+        <FixNote>
+          The agent is working in your CI. This usually takes a few minutes.
+        </FixNote>
+      )}
+      {run.status === 'complete' && !run.prUrl && (
+        <FixNote>
+          {run.error ??
+            'The workflow finished but no pull request was found for it.'}
+        </FixNote>
+      )}
+      {run.status === 'failed' && (
+        <FixNote tone="error">
+          {run.error ?? 'The fix run failed. Open the run for its logs.'}
+        </FixNote>
+      )}
+
+      <div className="flex items-center gap-3 flex-wrap">
+        {run.prUrl && (
+          <a
+            href={run.prUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="h-8 px-4 inline-flex items-center gap-2 bg-brand text-brand-fg font-display font-bold text-2xs uppercase tracking-widest hover:opacity-90 transition-opacity duration-100"
+          >
+            <GitPullRequest size={13} strokeWidth={2} aria-hidden />
+            View the pull request
+          </a>
+        )}
+        {run.runUrl && (
+          <a
+            href={run.runUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="h-8 px-4 inline-flex items-center gap-2 border border-bg-3 font-mono text-2xs font-bold uppercase tracking-widest text-fg-1 hover:bg-bg-2 hover:text-fg-0 transition-colors duration-100"
+          >
+            <ExternalLink size={13} strokeWidth={1.75} aria-hidden />
+            GitHub Actions run
+          </a>
+        )}
+        {!active && (
+          <button
+            type="button"
+            onClick={onRetry}
+            disabled={retrying}
+            className="h-8 px-4 inline-flex items-center gap-2 border border-bg-3 font-mono text-2xs font-bold uppercase tracking-widest text-fg-1 hover:bg-bg-2 hover:text-fg-0 disabled:opacity-50 transition-colors duration-100"
+          >
+            <Sparkles size={13} strokeWidth={1.75} aria-hidden />
+            {retrying ? 'Dispatching…' : 'Run again'}
+          </button>
+        )}
+        <BriefLink issueId={issueId} />
+      </div>
+    </div>
+  );
+}
+
+function FixStatusChip({ status }: { status: FixRun['status'] }) {
+  const tone =
+    status === 'complete'
+      ? 'bg-status-resolved'
+      : status === 'failed'
+        ? 'bg-error'
+        : 'bg-status-open';
+  return (
+    <span className="inline-flex items-center gap-2 font-mono text-2xs font-bold uppercase tracking-widest text-fg-0">
+      <span className={clsx('w-1.5 h-1.5 shrink-0', tone)} aria-hidden />
+      {status}
+    </span>
+  );
+}
+
+function BriefLink({ issueId }: { issueId: string }) {
+  return (
+    <a
+      href={`/api/v1/issues/${issueId}/brief`}
+      target="_blank"
+      rel="noreferrer"
+      className="font-mono text-2xs font-bold uppercase tracking-widest text-fg-2 hover:text-brand transition-colors duration-100"
+    >
+      Read the brief →
+    </a>
+  );
+}
+
+function FixShell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="px-6 py-5 flex flex-col gap-4 max-w-3xl">{children}</div>
+  );
+}
+
+function FixNote({
+  tone = 'default',
+  children,
+}: {
+  tone?: 'default' | 'error';
+  children: React.ReactNode;
+}) {
+  return (
+    <p
+      className={clsx(
+        'font-body text-xs leading-relaxed',
+        tone === 'error' ? 'text-fg-1' : 'text-fg-2',
+      )}
+    >
+      {children}
+    </p>
+  );
+}
+
+function FixCode({ children }: { children: React.ReactNode }) {
+  return (
+    <code className="font-mono text-2xs text-fg-0 bg-bg-2 px-1 py-0.5">
+      {children}
+    </code>
+  );
+}
+
 function StatusButton({
   label,
   active,
@@ -241,13 +559,13 @@ function StatusButton({
       onClick={onClick}
       disabled={disabled}
       className={clsx(
-        'h-8 px-3 font-mono text-[11px] font-bold uppercase tracking-widest transition-colors duration-100 disabled:opacity-50 disabled:cursor-not-allowed',
+        'h-8 px-3 font-mono text-2xs font-bold uppercase tracking-widest transition-colors duration-100 disabled:opacity-50 disabled:cursor-not-allowed',
         active
           ? tone === 'accent'
-            ? 'border border-accent text-accent bg-accent-muted'
+            ? 'border border-brand text-brand bg-brand-muted'
             : 'border border-bg-5 text-fg-0 bg-bg-3'
           : tone === 'accent'
-            ? 'border border-accent text-accent hover:bg-accent-muted'
+            ? 'border border-brand text-brand hover:bg-brand-muted'
             : 'border border-bg-4 text-fg-1 hover:text-fg-0 hover:border-bg-5',
       )}
     >
@@ -261,10 +579,10 @@ function IssueTitle({ detail }: { detail: IssueDetail }) {
   const topFrame = useMemo(() => pickTopFrame(latestEvent), [latestEvent]);
   return (
     <section className="px-6 pt-5 pb-4 shrink-0">
-      <h1 className="font-mono text-xl font-bold text-accent leading-tight break-words">
+      <h1 className="font-mono text-3xl font-bold text-brand leading-tight break-words">
         {issue.title}
       </h1>
-      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[11px] uppercase tracking-widest text-fg-2">
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-2xs uppercase tracking-widest text-fg-2">
         {topFrame && (
           <span className="text-fg-1">
             {topFrame.file}:{topFrame.line}
@@ -275,7 +593,7 @@ function IssueTitle({ detail }: { detail: IssueDetail }) {
           SEEN {issue.eventCount} {issue.eventCount === 1 ? 'TIME' : 'TIMES'}
         </span>
         <Dot />
-        <span>FIRST {relativeTime(issue.firstSeen)}</span>
+        <span>FIRST {formatRelative(issue.firstSeen)}</span>
         {latestEvent?.release && (
           <>
             <Dot />
@@ -287,7 +605,7 @@ function IssueTitle({ detail }: { detail: IssueDetail }) {
         {latestEvent?.environment && (
           <>
             <Dot />
-            <span className="text-accent">
+            <span className="text-brand">
               {latestEvent.environment.toUpperCase()}
             </span>
           </>
@@ -316,10 +634,10 @@ function ReplayPane({
     return (
       <div className="h-full flex items-center justify-center px-6 text-center">
         <div className="max-w-sm">
-          <p className="font-mono text-xs uppercase tracking-widest text-fg-2 mb-2">
+          <p className="font-mono text-2xs uppercase tracking-widest text-fg-2 mb-2">
             NO REPLAY
           </p>
-          <p className="font-body text-sm text-fg-1">
+          <p className="font-body text-xs text-fg-1">
             This event was captured without a session replay. Enable replay in
             the SDK config to get DOM playback on future events.
           </p>
@@ -345,8 +663,6 @@ function ReplayPane({
   );
 }
 
-// A signal never threw, so there is no stack to show. This panel is what
-// takes its place: the interaction, and what failed to follow it.
 function EvidencePanel({
   detail,
   onSeek,
@@ -362,7 +678,7 @@ function EvidencePanel({
     return (
       <div className="h-full flex flex-col">
         <EvidenceHeader label="unavailable" />
-        <div className="flex-1 p-4 font-mono text-xs text-fg-2">
+        <div className="flex-1 p-4 font-mono text-2xs text-fg-2">
           No interaction detail recorded for this event.
         </div>
       </div>
@@ -381,14 +697,14 @@ function EvidencePanel({
 
       <div className="flex-1 overflow-auto">
         <EvidenceRow label="Element">
-          <code className="font-mono text-xs text-fg-0 break-all">
+          <code className="font-mono text-2xs text-fg-0 break-all">
             {signal.selector}
           </code>
         </EvidenceRow>
 
         {signal.targetText && (
           <EvidenceRow label="Label">
-            <span className="font-body text-sm text-fg-0">
+            <span className="font-body text-xs text-fg-0">
               “{signal.targetText}”
             </span>
           </EvidenceRow>
@@ -396,7 +712,7 @@ function EvidencePanel({
 
         {!isDead && (
           <EvidenceRow label="Clicks">
-            <span className="font-mono text-xs text-fg-0 tabular-nums">
+            <span className="font-mono text-2xs text-fg-0 tabular-nums">
               {signal.clickCount} within 1s
             </span>
           </EvidenceRow>
@@ -409,7 +725,7 @@ function EvidencePanel({
                 (line) => (
                   <li
                     key={line}
-                    className="flex items-center gap-2.5 font-mono text-xs text-fg-1"
+                    className="flex items-center gap-2.5 font-mono text-2xs text-fg-1"
                   >
                     <span
                       className="w-1.5 h-1.5 shrink-0 bg-status-open"
@@ -420,14 +736,14 @@ function EvidencePanel({
                 ),
               )}
             </ul>
-            <p className="mt-3 font-body text-sm text-fg-2">
+            <p className="mt-3 font-body text-xs text-fg-2">
               Measured over the 800ms after the click.
             </p>
           </EvidenceRow>
         )}
 
         <EvidenceRow label="Page">
-          <span className="font-mono text-xs text-fg-1 break-all">
+          <span className="font-mono text-2xs text-fg-1 break-all">
             {detail.latestEvent?.metadata.url ?? '—'}
           </span>
         </EvidenceRow>
@@ -437,7 +753,7 @@ function EvidencePanel({
         <button
           type="button"
           onClick={() => onSeek(seekOffset)}
-          className="shrink-0 h-12 border-t border-border-ghost font-mono text-xs font-bold uppercase tracking-widest text-fg-1 hover:bg-accent-muted hover:text-fg-0 transition-colors duration-100"
+          className="shrink-0 h-12 border-t border-border-ghost font-mono text-2xs font-bold uppercase tracking-widest text-fg-1 hover:bg-brand-muted hover:text-fg-0 transition-colors duration-100"
         >
           Jump to interaction
         </button>
@@ -449,10 +765,10 @@ function EvidencePanel({
 function EvidenceHeader({ label }: { label: string }) {
   return (
     <div className="h-10 px-4 flex items-center justify-between border-b border-border-ghost shrink-0">
-      <span className="font-mono text-[11px] font-bold uppercase tracking-widest text-fg-1">
+      <span className="font-mono text-2xs font-bold uppercase tracking-widest text-fg-1">
         Evidence
       </span>
-      <span className="font-mono text-[10px] uppercase tracking-widest text-fg-2">
+      <span className="font-mono text-3xs uppercase tracking-widest text-fg-2">
         {label}
       </span>
     </div>
@@ -468,7 +784,7 @@ function EvidenceRow({
 }) {
   return (
     <div className="px-4 py-3 border-b border-border-ghost">
-      <div className="font-mono text-[10px] uppercase tracking-widest text-fg-2">
+      <div className="font-mono text-3xs uppercase tracking-widest text-fg-2">
         {label}
       </div>
       <div className="mt-2">{children}</div>
@@ -488,16 +804,16 @@ function StackTracePanel({ detail }: { detail: IssueDetail }) {
   return (
     <div className="h-full flex flex-col">
       <div className="h-10 px-4 flex items-center justify-between border-b border-border-ghost shrink-0">
-        <span className="font-mono text-[11px] font-bold uppercase tracking-widest text-fg-1">
+        <span className="font-mono text-2xs font-bold uppercase tracking-widest text-fg-1">
           Stack trace
         </span>
-        <span className="font-mono text-[10px] uppercase tracking-widest text-fg-2">
+        <span className="font-mono text-3xs uppercase tracking-widest text-fg-2">
           {hasResolved ? 'resolved' : 'main thread'}
         </span>
       </div>
 
       {isEmpty ? (
-        <div className="flex-1 p-4 font-mono text-xs text-fg-2 whitespace-pre-wrap break-words overflow-auto">
+        <div className="flex-1 p-4 font-mono text-2xs text-fg-2 whitespace-pre-wrap break-words overflow-auto">
           {stack ?? 'No stack trace captured.'}
         </div>
       ) : hasResolved ? (
@@ -525,17 +841,17 @@ function StackFrame({ frame, isActive }: { frame: Frame; isActive: boolean }) {
     <div
       className={clsx(
         'px-4 py-3 border-b border-border-ghost',
-        isActive && 'bg-accent-muted border-l-2 border-l-accent',
+        isActive && 'bg-brand-muted border-l-2 border-l-brand',
       )}
     >
       <div className="flex items-baseline justify-between gap-3">
         <div className="min-w-0">
-          <span className="font-mono text-xs text-fg-2">at </span>
-          <span className="font-mono text-xs text-fg-0 font-medium">
+          <span className="font-mono text-2xs text-fg-2">at </span>
+          <span className="font-mono text-2xs text-fg-0 font-medium">
             {frame.fn}
           </span>
         </div>
-        <span className="font-mono text-[11px] text-fg-2 truncate max-w-[180px]">
+        <span className="font-mono text-2xs text-fg-2 truncate max-w-[180px]">
           {shortFile}:{frame.line}
         </span>
       </div>
@@ -563,23 +879,23 @@ function ResolvedFrameRow({
     <div
       className={clsx(
         'border-b border-border-ghost',
-        isActive && 'bg-accent-muted border-l-2 border-l-accent',
+        isActive && 'bg-brand-muted border-l-2 border-l-brand',
       )}
     >
       <div className="px-4 py-3">
         <div className="flex items-baseline justify-between gap-3">
           <div className="min-w-0">
-            <span className="font-mono text-xs text-fg-2">at </span>
-            <span className="font-mono text-xs text-fg-0 font-medium">
+            <span className="font-mono text-2xs text-fg-2">at </span>
+            <span className="font-mono text-2xs text-fg-0 font-medium">
               {fn}
             </span>
             {!isResolved && (
-              <span className="ml-2 font-mono text-[10px] uppercase tracking-widest text-fg-2">
+              <span className="ml-2 font-mono text-3xs uppercase tracking-widest text-fg-2">
                 raw
               </span>
             )}
           </div>
-          <span className="font-mono text-[11px] text-fg-2 truncate max-w-[280px]">
+          <span className="font-mono text-2xs text-fg-2 truncate max-w-[280px]">
             {displayFile}
             {line != null && `:${line}`}
             {col != null && `:${col}`}
@@ -615,16 +931,16 @@ function ContextBlock({
   const all = [...pre, line, ...post];
   return (
     <div className="border-t border-border-ghost overflow-x-auto bg-bg-1">
-      <pre className="font-mono text-[11px] leading-relaxed py-2">
+      <pre className="font-mono text-2xs leading-relaxed py-2">
         {all.map((text, i) => {
           const lineNo = startLine + i;
           const isErr = lineNo === errorLine;
           return (
-            <div key={i} className={clsx('flex', isErr && 'bg-accent-muted')}>
+            <div key={i} className={clsx('flex', isErr && 'bg-brand-muted')}>
               <span
                 className={clsx(
                   'pl-4 pr-3 select-none text-right tabular-nums w-14 shrink-0',
-                  isErr ? 'text-accent' : 'text-fg-2',
+                  isErr ? 'text-brand' : 'text-fg-2',
                 )}
               >
                 {lineNo}
@@ -682,9 +998,9 @@ function BottomTabs({
         expanded ? 'h-[60vh]' : 'h-[30vh]',
       )}
     >
-      <div className="flex h-11 px-6 items-center gap-6 border-b border-border-ghost shrink-0">
+      <div className="flex h-12 px-6 items-center gap-6 border-b border-border-ghost shrink-0">
         <TabButton id="dom" tab={tab} onTab={onTab} label="DOM" />
-        {/* Signals have no stack by definition — the Evidence panel replaces it. */}
+        {}
         {detail.issue.kind !== 'signal' && (
           <TabButton id="stack" tab={tab} onTab={onTab} label="STACK" />
         )}
@@ -702,6 +1018,7 @@ function BottomTabs({
           label="CONSOLE"
           count={consoleEvents.length}
         />
+        <TabButton id="fix" tab={tab} onTab={onTab} label="FIX" />
         <button
           type="button"
           onClick={onToggleExpand}
@@ -739,6 +1056,7 @@ function BottomTabs({
             onSeek={onSeek}
           />
         )}
+        {tab === 'fix' && <FixPanel detail={detail} />}
       </div>
     </section>
   );
@@ -768,11 +1086,11 @@ function TabButton({
       onClick={() => !disabled && onTab(id)}
       disabled={disabled}
       className={clsx(
-        'relative h-11 inline-flex items-center gap-2 font-mono text-[11px] font-bold uppercase tracking-widest transition-colors duration-100',
+        'relative h-12 inline-flex items-center gap-2 font-mono text-2xs font-bold uppercase tracking-widest transition-colors duration-100',
         disabled
           ? 'text-fg-2 cursor-not-allowed'
           : active
-            ? 'text-accent'
+            ? 'text-brand'
             : 'text-fg-1 hover:text-fg-0',
       )}
     >
@@ -780,21 +1098,21 @@ function TabButton({
       {typeof count === 'number' && count > 0 && (
         <span
           className={clsx(
-            'text-[10px] tabular-nums tracking-normal',
-            active ? 'text-accent' : 'text-fg-2',
+            'text-3xs tabular-nums tracking-normal',
+            active ? 'text-brand' : 'text-fg-2',
           )}
         >
           {count}
         </span>
       )}
       {badge && (
-        <span className="inline-flex h-4 px-1 items-center bg-bg-3 text-[9px] text-fg-2 tracking-wider">
+        <span className="inline-flex h-4 px-1 items-center bg-bg-3 text-3xs text-fg-2 tracking-wider">
           {badge}
         </span>
       )}
       {active && !disabled && (
         <span
-          className="absolute left-0 right-0 -bottom-px h-[2px] bg-accent"
+          className="absolute left-0 right-0 -bottom-px h-[2px] bg-brand"
           aria-hidden
         />
       )}
@@ -807,7 +1125,7 @@ function MetaGrid({ detail }: { detail: IssueDetail }) {
   if (!e) {
     return (
       <div className="px-6 py-5 h-full">
-        <p className="font-mono text-xs text-fg-2 uppercase tracking-widest">
+        <p className="font-mono text-2xs text-fg-2 uppercase tracking-widest">
           No event metadata.
         </p>
       </div>
@@ -850,14 +1168,14 @@ function MetaRow({
 }) {
   return (
     <div className="flex items-center justify-between gap-6 min-w-0">
-      <dt className="font-mono text-[11px] uppercase tracking-widest text-fg-2 shrink-0">
+      <dt className="font-mono text-2xs uppercase tracking-widest text-fg-2 shrink-0">
         {label}
       </dt>
       <dd
         className={clsx(
           'truncate min-w-0 text-right',
-          mono ? 'font-mono text-[12px]' : 'font-body text-sm',
-          link ? 'text-[#7dd3fc]' : accent ? 'text-accent' : 'text-fg-1',
+          mono ? 'font-mono text-xs' : 'font-body text-xs',
+          link ? 'text-[#7dd3fc]' : accent ? 'text-brand' : 'text-fg-1',
         )}
         title={value}
       >
@@ -871,13 +1189,13 @@ function StackRawPanel({ detail }: { detail: IssueDetail }) {
   const stack = detail.latestEvent?.stackTrace;
   if (!stack) {
     return (
-      <p className="font-mono text-xs text-fg-2 uppercase tracking-widest">
+      <p className="font-mono text-2xs text-fg-2 uppercase tracking-widest">
         No stack trace captured.
       </p>
     );
   }
   return (
-    <pre className="font-mono text-xs text-fg-1 whitespace-pre-wrap break-words">
+    <pre className="font-mono text-2xs text-fg-1 whitespace-pre-wrap break-words">
       {stack}
     </pre>
   );
@@ -917,10 +1235,10 @@ function NetworkPanel({
   if (events.length === 0) {
     return (
       <div className="py-8 text-center">
-        <p className="font-mono text-xs uppercase tracking-widest text-fg-2">
+        <p className="font-mono text-2xs uppercase tracking-widest text-fg-2">
           No network activity captured
         </p>
-        <p className="mt-2 font-body text-sm text-fg-1">
+        <p className="mt-2 font-body text-xs text-fg-1">
           The SDK records fetch and XHR requests during the 30s replay buffer.
           Calls before init or outside that window are not shown.
         </p>
@@ -931,7 +1249,7 @@ function NetworkPanel({
   if (bufferStart === null) {
     return (
       <div className="py-8 text-center">
-        <p className="font-mono text-xs uppercase tracking-widest text-fg-2">
+        <p className="font-mono text-2xs uppercase tracking-widest text-fg-2">
           Replay timeline unavailable
         </p>
       </div>
@@ -940,14 +1258,14 @@ function NetworkPanel({
 
   return (
     <div>
-      <div className="grid grid-cols-[60px_1fr_60px_80px_70px] gap-3 px-6 h-8 items-center border-b border-border-ghost font-mono text-[10px] uppercase tracking-widest text-fg-2 sticky top-0 bg-bg-1 z-10">
+      <div className="grid grid-cols-[60px_1fr_60px_80px_70px] gap-3 px-6 h-8 items-center border-b border-border-ghost font-mono text-3xs uppercase tracking-widest text-fg-2 sticky top-0 bg-bg-1 z-10">
         <span>Method</span>
         <span>URL</span>
         <span>Status</span>
         <span className="text-right">Duration</span>
         <span className="text-right">Time</span>
       </div>
-      <ul className="font-mono text-[12px]">
+      <ul className="font-mono text-xs">
         {rows.map(({ event, offsetMs }, i) => (
           <NetworkRow
             key={i}
@@ -980,7 +1298,7 @@ function NetworkRow({
     : status !== null && status >= 500
       ? 'text-[color:var(--color-error)]'
       : status !== null && status >= 400
-        ? 'text-accent'
+        ? 'text-brand'
         : 'text-fg-1';
 
   return (
@@ -989,12 +1307,12 @@ function NetworkRow({
         type="button"
         onClick={onClick}
         className={clsx(
-          'w-full grid grid-cols-[60px_1fr_60px_80px_70px] gap-3 px-6 h-8 items-center text-left transition-colors duration-75 cursor-pointer border-b border-border-ghost',
-          isActive ? 'bg-accent/15 text-fg-0' : 'hover:bg-bg-2',
+          'w-full grid grid-cols-[60px_1fr_60px_80px_70px] gap-3 px-6 h-8 items-center text-left transition-colors duration-100 cursor-pointer border-b border-border-ghost',
+          isActive ? 'bg-brand/15 text-fg-0' : 'hover:bg-bg-2',
         )}
       >
         <span
-          className={clsx('font-bold', isActive ? 'text-accent' : 'text-fg-1')}
+          className={clsx('font-bold', isActive ? 'text-brand' : 'text-fg-1')}
         >
           {event.method}
         </span>
@@ -1097,10 +1415,10 @@ function ConsolePanel({
   if (events.length === 0) {
     return (
       <div className="py-8 text-center">
-        <p className="font-mono text-xs uppercase tracking-widest text-fg-2">
+        <p className="font-mono text-2xs uppercase tracking-widest text-fg-2">
           No console activity captured
         </p>
-        <p className="mt-2 font-body text-sm text-fg-1">
+        <p className="mt-2 font-body text-xs text-fg-1">
           The SDK records console.log / info / warn / error / debug calls during
           the 30s replay buffer. Calls before init or outside that window are
           not shown.
@@ -1112,7 +1430,7 @@ function ConsolePanel({
   if (bufferStart === null) {
     return (
       <div className="py-8 text-center">
-        <p className="font-mono text-xs uppercase tracking-widest text-fg-2">
+        <p className="font-mono text-2xs uppercase tracking-widest text-fg-2">
           Replay timeline unavailable
         </p>
       </div>
@@ -1121,7 +1439,7 @@ function ConsolePanel({
 
   return (
     <div>
-      <div className="grid grid-cols-[60px_1fr_70px] gap-3 px-6 h-8 items-center border-b border-border-ghost font-mono text-[10px] uppercase tracking-widest text-fg-2 sticky top-0 bg-bg-1 z-10">
+      <div className="grid grid-cols-[60px_1fr_70px] gap-3 px-6 h-8 items-center border-b border-border-ghost font-mono text-3xs uppercase tracking-widest text-fg-2 sticky top-0 bg-bg-1 z-10">
         <span>Level</span>
         <span className="flex items-center gap-5 normal-case tracking-normal text-fg-1">
           <ConsoleFilterChip
@@ -1151,12 +1469,12 @@ function ConsolePanel({
       </div>
       {rows.length === 0 ? (
         <div className="py-8 text-center">
-          <p className="font-mono text-xs uppercase tracking-widest text-fg-2">
+          <p className="font-mono text-2xs uppercase tracking-widest text-fg-2">
             No entries match this filter
           </p>
         </div>
       ) : (
-        <ul className="font-mono text-[12px]">
+        <ul className="font-mono text-xs">
           {rows.map(({ event, offsetMs }, i) => (
             <ConsoleRow
               key={i}
@@ -1187,14 +1505,14 @@ function ConsoleFilterChip({
     tone === 'error'
       ? 'text-[color:var(--color-error)]'
       : tone === 'warn'
-        ? 'text-accent'
+        ? 'text-brand'
         : 'text-fg-1';
   return (
     <button
       type="button"
       onClick={onClick}
       className={clsx(
-        'inline-flex h-7 items-center font-mono text-xs transition-opacity duration-100 cursor-pointer',
+        'inline-flex h-7 items-center font-mono text-2xs transition-opacity duration-100 cursor-pointer',
         toneText,
         active ? 'opacity-100' : 'opacity-90',
       )}
@@ -1224,12 +1542,12 @@ function ConsoleRow({
         type="button"
         onClick={onClick}
         className={clsx(
-          'w-full grid grid-cols-[60px_1fr_70px] gap-3 px-6 h-8 items-center text-left transition-colors duration-75 cursor-pointer border-b border-border-ghost',
-          isActive ? 'bg-accent/15 text-fg-0' : 'hover:bg-bg-2',
+          'w-full grid grid-cols-[60px_1fr_70px] gap-3 px-6 h-8 items-center text-left transition-colors duration-100 cursor-pointer border-b border-border-ghost',
+          isActive ? 'bg-brand/15 text-fg-0' : 'hover:bg-bg-2',
         )}
       >
         <span
-          className={clsx('font-bold', isActive ? 'text-accent' : tone.text)}
+          className={clsx('font-bold', isActive ? 'text-brand' : tone.text)}
         >
           {event.level.toUpperCase()}
         </span>
@@ -1257,7 +1575,7 @@ function consoleLevelTone(level: ConsoleLevel): { text: string } {
     case 'error':
       return { text: 'text-[color:var(--color-error)]' };
     case 'warn':
-      return { text: 'text-accent' };
+      return { text: 'text-brand' };
     case 'debug':
       return { text: 'text-fg-2' };
     case 'info':
@@ -1297,49 +1615,6 @@ function formatArg(a: unknown): string {
 
 function truncateForRow(s: string): string {
   return s.length > ARG_MAX_LEN ? `${s.slice(0, ARG_MAX_LEN)}…` : s;
-}
-
-function PageLoading() {
-  return (
-    <main className="min-h-[calc(100vh-60px)] flex items-center justify-center">
-      <span className="font-mono text-xs uppercase tracking-widest text-fg-2">
-        Loading issue...
-      </span>
-    </main>
-  );
-}
-
-function PageError({
-  message,
-  onRetry,
-}: {
-  message: string;
-  onRetry?: () => void;
-}) {
-  return (
-    <main className="min-h-[calc(100vh-60px)] flex flex-col items-center justify-center gap-4">
-      <span className="font-mono text-xs uppercase tracking-widest text-[color:var(--color-error)]">
-        {message}
-      </span>
-      {onRetry && (
-        <button
-          type="button"
-          onClick={onRetry}
-          className="h-8 px-3 border border-bg-4 font-mono text-[11px] uppercase tracking-widest text-fg-1 hover:text-fg-0 hover:border-bg-5 transition-colors duration-100"
-        >
-          Retry
-        </button>
-      )}
-    </main>
-  );
-}
-
-function formatError(err: unknown) {
-  if (err instanceof ApiError) {
-    if (err.status === 404) return 'Issue not found.';
-    return `Failed to load issue (${err.status}).`;
-  }
-  return 'Failed to load issue.';
 }
 
 function parseStack(stack: string | null): Frame[] {
@@ -1436,17 +1711,4 @@ function formatUtc(iso: string) {
   if (Number.isNaN(d.getTime())) return iso;
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())} UTC`;
-}
-
-function relativeTime(iso: string) {
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return '—';
-  const diffSec = Math.max(0, Math.floor((Date.now() - then) / 1000));
-  if (diffSec < 60) return `${diffSec}S AGO`;
-  const mins = Math.floor(diffSec / 60);
-  if (mins < 60) return `${mins}M AGO`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}H AGO`;
-  const days = Math.floor(hours / 24);
-  return `${days}D AGO`;
 }
