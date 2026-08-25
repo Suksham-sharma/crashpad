@@ -24,7 +24,24 @@ import {
 } from '@/components/ui/select';
 import { PageError } from '@/components/patterns/PageError';
 import { PageLoading } from '@/components/patterns/PageLoading';
+import { Badge } from '@/components/ui/badge';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { Dot } from '@/components/ui/dot';
+import { IconButton } from '@/components/ui/icon-button';
+import { Input } from '@/components/ui/input';
+import { Kbd } from '@/components/ui/kbd';
+import { Label } from '@/components/ui/label';
+import {
+  Panel,
+  PanelBody,
+  PanelHeader,
+  PanelMeta,
+  PanelTitle,
+} from '@/components/ui/panel';
+import { Row } from '@/components/ui/row';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Copy, RotateCw, X } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -60,11 +77,133 @@ export default function PreviewPage() {
             Primitives
           </h1>
           <p className="font-body text-xs text-fg-1 mt-1">
-            shadcn/ui generated against Crashpad tokens. Every corner here must
-            be square except the status dot.
+            Every corner here must be square. Control heights resolve to h-8,
+            h-10, h-12 or h-14 and nothing else.
           </p>
         </header>
 
+        <h2 className={`${LABEL} mb-4`}>Hand-built</h2>
+        <div className="grid grid-cols-2 gap-4 max-w-[900px] mb-12">
+          <Cell title="Button">
+            <div className="flex flex-wrap items-center gap-3">
+              <Button variant="primary">Fix it</Button>
+              <Button variant="secondary">Resolve</Button>
+              <Button variant="danger">Delete</Button>
+              <Button variant="ghost">Cancel</Button>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button size="sm">sm</Button>
+              <Button size="md">md</Button>
+              <Button size="lg" variant="primary">
+                lg
+              </Button>
+              <Button disabled>disabled</Button>
+            </div>
+          </Cell>
+
+          <Cell title="Label">
+            <div className="flex flex-col gap-2">
+              <Label size="xs">Dense metadata</Label>
+              <Label size="sm">Workhorse label</Label>
+              <Label size="md">Section heading</Label>
+              <Label tone="strong">Strong</Label>
+              <Label tone="brand">Brand</Label>
+            </div>
+          </Cell>
+
+          <Cell title="Badge · Dot">
+            <div className="flex flex-wrap items-center gap-3">
+              <Badge variant="brand">
+                <Dot tone="brand" />
+                Live
+              </Badge>
+              <Badge variant="surface">42 events</Badge>
+              <Badge variant="outline">v1.4.0</Badge>
+              <Badge variant="error">Failed</Badge>
+              <Badge variant="warning">Degraded</Badge>
+            </div>
+            <div className="flex flex-wrap items-center gap-4">
+              <Badge variant="bare">
+                <Dot tone="open" />
+                Open
+              </Badge>
+              <Badge variant="bare">
+                <Dot tone="resolved" />
+                Resolved
+              </Badge>
+              <Badge variant="bare">
+                <Dot tone="ignored" />
+                Ignored
+              </Badge>
+              <Badge variant="bare" size="sm">
+                <Dot tone="brand" pulse />
+                Recording
+              </Badge>
+            </div>
+          </Cell>
+
+          <Cell title="Input · Kbd">
+            <Input placeholder="Search issues" />
+            <Input size="sm" placeholder="Compact" />
+            <Input size="lg" placeholder="Modal input" />
+            <p className="font-body text-xs text-fg-1">
+              Press <Kbd>⌘</Kbd> <Kbd>K</Kbd> to jump.
+            </p>
+          </Cell>
+
+          <Cell title="IconButton">
+            <div className="flex items-center gap-3">
+              <IconButton label="Copy fingerprint">
+                <Copy />
+              </IconButton>
+              <IconButton label="Retry" variant="surface">
+                <RotateCw />
+              </IconButton>
+              <IconButton label="Dismiss" variant="outline">
+                <X />
+              </IconButton>
+              <IconButton label="Copy" size="md" variant="surface">
+                <Copy />
+              </IconButton>
+            </div>
+          </Cell>
+
+          <Cell title="Skeleton">
+            <div className="flex flex-col gap-3">
+              <Skeleton className="h-3 w-[220px]" />
+              <Skeleton className="h-3 w-[160px]" />
+              <Skeleton className="h-8 w-20" motion="still" />
+            </div>
+          </Cell>
+
+          <Cell title="Panel · Row">
+            <Panel className="h-[188px]">
+              <PanelHeader>
+                <PanelTitle>Network</PanelTitle>
+                <PanelMeta>12 requests</PanelMeta>
+              </PanelHeader>
+              <PanelBody>
+                <Row divided interactive>
+                  <span className="font-bold text-fg-1">GET</span>
+                  <span className="truncate text-fg-1">/api/v1/cart</span>
+                  <span className="ml-auto tabular-nums text-fg-2">200</span>
+                </Row>
+                <Row divided interactive active>
+                  <span className="font-bold text-brand">POST</span>
+                  <span className="truncate">/api/v1/checkout</span>
+                  <span className="ml-auto tabular-nums text-error">500</span>
+                </Row>
+                <Row divided interactive>
+                  <span className="font-bold text-fg-1">GET</span>
+                  <span className="truncate text-fg-1">/api/v1/session</span>
+                  <span className="ml-auto tabular-nums text-fg-2">204</span>
+                </Row>
+              </PanelBody>
+            </Panel>
+          </Cell>
+        </div>
+
+        <h2 className={`${LABEL} mb-4`}>Generated (shadcn/ui)</h2>
         <div className="grid grid-cols-2 gap-4 max-w-[900px]">
           <Cell title="Tabs">
             <Tabs defaultValue="dom">
@@ -101,7 +240,9 @@ export default function PreviewPage() {
 
           <Cell title="Tooltip">
             <Tooltip>
-              <TooltipTrigger className="h-8 px-3 border border-bg-3 font-mono text-2xs uppercase tracking-widest text-fg-1 hover:bg-bg-2 hover:text-fg-0 transition-colors duration-100">
+              <TooltipTrigger
+                className={buttonVariants({ variant: 'secondary', size: 'sm' })}
+              >
                 Hover me
               </TooltipTrigger>
               <TooltipContent>Fingerprint: 8f2a…c41d</TooltipContent>
@@ -110,7 +251,9 @@ export default function PreviewPage() {
 
           <Cell title="Popover">
             <Popover open={open} onOpenChange={setOpen}>
-              <PopoverTrigger className="h-8 px-3 bg-brand text-brand-fg font-mono text-2xs font-bold uppercase tracking-widest">
+              <PopoverTrigger
+                className={buttonVariants({ variant: 'primary', size: 'sm' })}
+              >
                 Open
               </PopoverTrigger>
               <PopoverContent>
