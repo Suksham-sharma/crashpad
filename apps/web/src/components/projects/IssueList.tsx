@@ -65,7 +65,7 @@ export function IssueList({ issues }: { issues: Issue[] }) {
 
   return (
     <div className="mx-auto max-w-screen-2xl pt-4">
-      <ul aria-label="Issues" {...containerProps}>
+      <ul aria-label="Issues" className="@container" {...containerProps}>
         {issues.map((issue, i) => (
           <IssueRow
             key={issue.id}
@@ -110,12 +110,12 @@ function IssueRow({
               {issue.title}
             </div>
           </div>
-          <div className="hidden w-28 shrink-0 flex-col items-end md:flex">
+          <div className="hidden w-28 shrink-0 flex-col items-end @3xl:flex">
             <span className="font-mono text-3xs font-bold uppercase tracking-widest text-fg-0">
               {issue.eventCount} {issue.eventCount === 1 ? 'event' : 'events'}
             </span>
           </div>
-          <div className="hidden w-24 shrink-0 text-right font-mono text-3xs uppercase tracking-widest text-fg-2 sm:block">
+          <div className="hidden w-24 shrink-0 text-right font-mono text-3xs uppercase tracking-widest text-fg-2 @xl:block">
             {formatRelative(issue.lastSeen)}
           </div>
           <div className="flex w-6 shrink-0 items-center justify-end">

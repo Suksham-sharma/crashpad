@@ -235,7 +235,7 @@ export const DockedPlayer = forwardRef<DockedPlayerHandle, Props>(
 
     return (
       <div className="flex h-full flex-col" onKeyDown={onKeyDown}>
-        <div className="relative min-h-0 flex-1 overflow-hidden bg-bg-0">
+        <div className="@container relative min-h-0 flex-1 overflow-hidden bg-bg-0">
           <div
             ref={stageRef}
             className="absolute inset-0 flex items-center justify-center"
@@ -295,7 +295,7 @@ export const DockedPlayer = forwardRef<DockedPlayerHandle, Props>(
             <Badge
               size="sm"
               variant="scrim"
-              className="pointer-events-none absolute right-3 top-3 z-10"
+              className="pointer-events-none absolute right-3 top-3 z-10 hidden @sm:inline-flex"
             >
               <Dot tone="muted" size="sm" />
               Paused
@@ -321,7 +321,7 @@ export const DockedPlayer = forwardRef<DockedPlayerHandle, Props>(
           )}
         </div>
 
-        <div className="flex h-12 items-center gap-3 border-t border-border-ghost bg-bg-1 px-3">
+        <div className="@container flex h-12 items-center gap-2 border-t border-border-ghost bg-bg-1 px-3 @lg:gap-3">
           <IconButton
             label={playing ? 'Pause' : 'Play'}
             variant="brand"
@@ -344,11 +344,11 @@ export const DockedPlayer = forwardRef<DockedPlayerHandle, Props>(
             disabled={!ready}
           />
 
-          <span className="shrink-0 whitespace-nowrap font-mono text-2xs tabular-nums text-fg-1">
+          <span className="hidden shrink-0 whitespace-nowrap font-mono text-2xs tabular-nums text-fg-1 @xs:inline">
             {formatClock(currentMs)} / {formatClock(durationMs)}
           </span>
 
-          <div className="flex shrink-0 items-center gap-1">
+          <div className="hidden shrink-0 items-center gap-1 @md:flex">
             {SPEEDS.map((s) => (
               <button
                 key={s}

@@ -59,13 +59,14 @@ export function BottomTabs({
   return (
     <section
       className={cn(
+        '@container',
         'flex flex-col border-t border-border-ghost transition-[height] duration-150',
         expanded ? 'h-[60vh]' : 'h-[30vh]',
       )}
     >
       <div
         role="tablist"
-        className="flex h-12 shrink-0 items-center gap-6 border-b border-border-ghost px-6"
+        className="flex h-12 shrink-0 items-center gap-4 overflow-x-auto border-b border-border-ghost px-6 @2xl:gap-6"
       >
         <TabButton id="dom" tab={tab} onTab={onTab} label="DOM" />
         {detail.issue.kind !== 'signal' && (
@@ -99,7 +100,7 @@ export function BottomTabs({
           )}
         </IconButton>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="@container min-h-0 flex-1 overflow-y-auto">
         {tab === 'dom' && <MetaGrid detail={detail} />}
         {tab === 'stack' && (
           <div className="px-6 py-5">
@@ -186,7 +187,7 @@ function MetaGrid({ detail }: { detail: IssueDetail }) {
   const m: EventMetadata = e.metadata;
 
   return (
-    <dl className="grid grid-cols-1 gap-x-12 gap-y-3 px-6 py-5 md:grid-cols-2">
+    <dl className="grid grid-cols-1 gap-x-12 gap-y-3 px-6 py-5 @3xl:grid-cols-2">
       <MetaRow label="Browser" value={parseBrowser(m.userAgent)} />
       <MetaRow label="Release" value={e.release ?? '—'} mono />
       <MetaRow label="OS" value={parseOS(m.userAgent)} />

@@ -12,7 +12,7 @@ import type { Project } from '@/queries/projects';
 
 export function ProjectList({ projects }: { projects: Project[] }) {
   return (
-    <div>
+    <div className="@container">
       <ListHeader />
       <ul>
         {projects.map((p, i) => (
@@ -25,7 +25,7 @@ export function ProjectList({ projects }: { projects: Project[] }) {
 
 export function ProjectsSkeleton() {
   return (
-    <div>
+    <div className="@container">
       <ListHeader />
       <ul>
         {Array.from({ length: 3 }).map((_, i) => (
@@ -38,8 +38,8 @@ export function ProjectsSkeleton() {
           >
             <Skeleton motion="still" className="h-2 w-2 shrink-0" />
             <Skeleton className="h-3 max-w-[180px] flex-1" />
-            <Skeleton className="hidden h-3 w-24 md:block" />
-            <Skeleton className="hidden h-3 w-52 lg:block" />
+            <Skeleton className="hidden h-3 w-24 @3xl:block" />
+            <Skeleton className="hidden h-3 w-52 @5xl:block" />
             <div className="w-6" />
           </li>
         ))}
@@ -53,8 +53,8 @@ function ListHeader() {
     <div className="flex h-8 items-center gap-5 border-b border-border-ghost px-5 font-mono text-3xs uppercase tracking-widest text-fg-2">
       <span className="w-2 shrink-0" aria-hidden />
       <span className="min-w-0 flex-1">Name</span>
-      <span className="hidden w-24 shrink-0 md:block">Created</span>
-      <span className="hidden w-52 shrink-0 lg:block">API key</span>
+      <span className="hidden w-24 shrink-0 @3xl:block">Created</span>
+      <span className="hidden w-52 shrink-0 @5xl:block">API key</span>
       <span className="w-6 shrink-0" aria-hidden />
     </div>
   );
@@ -95,11 +95,11 @@ function ProjectRow({ project, zebra }: { project: Project; zebra: boolean }) {
           {project.name}
         </span>
 
-        <span className="hidden w-24 shrink-0 font-mono text-3xs uppercase tracking-widest text-fg-2 md:block">
+        <span className="hidden w-24 shrink-0 font-mono text-3xs uppercase tracking-widest text-fg-2 @3xl:block">
           {formatRelative(project.createdAt)}
         </span>
 
-        <div className="hidden w-52 shrink-0 items-center gap-3 font-mono text-xs lg:flex">
+        <div className="hidden w-52 shrink-0 items-center gap-3 font-mono text-xs @5xl:flex">
           <span className="flex-1 truncate text-fg-0">
             {maskApiKey(project.apiKey)}
           </span>

@@ -47,7 +47,7 @@ export default function IssueDetailPage() {
     <main className="flex h-[calc(100vh-var(--nav-height))] flex-col overflow-hidden">
       <IssueHeader detail={data} onOpenFix={() => setTab('fix')} />
       <IssueTitle detail={data} />
-      <div className="grid min-h-[var(--replay-min)] flex-1 grid-cols-[1fr_440px] grid-rows-[1fr] gap-px bg-border-ghost">
+      <div className="grid min-h-[var(--replay-min)] flex-1 grid-cols-[1fr_clamp(300px,34%,440px)] grid-rows-[1fr] gap-px bg-border-ghost">
         <div className="min-h-0 min-w-0 overflow-hidden bg-bg-0">
           <ReplayPane
             detail={data}
@@ -55,7 +55,7 @@ export default function IssueDetailPage() {
             onTimeChange={setCurrentMs}
           />
         </div>
-        <div className="min-h-0 min-w-0 overflow-hidden bg-bg-1">
+        <div className="@container min-h-0 min-w-0 overflow-hidden bg-bg-1">
           {data.issue.kind === 'signal' ? (
             <EvidencePanel detail={data} onSeek={handleSeek} />
           ) : (

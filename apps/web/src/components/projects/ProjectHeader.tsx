@@ -11,7 +11,7 @@ export function ProjectHeader({ project }: { project: Project }) {
   const { copied, copy } = useCopy();
 
   return (
-    <div className="mx-auto flex h-14 max-w-screen-2xl items-center justify-between gap-6 border-b border-border-ghost px-6">
+    <div className="@container mx-auto flex h-14 max-w-screen-2xl items-center justify-between gap-6 border-b border-border-ghost px-6">
       <div className="flex min-w-0 items-center gap-3">
         <Link
           href="/dashboard"
@@ -29,7 +29,7 @@ export function ProjectHeader({ project }: { project: Project }) {
 
       <div className="flex shrink-0 items-center gap-4">
         <div className="flex items-center gap-2">
-          <Label className="hidden sm:inline">API key</Label>
+          <Label className="hidden @2xl:inline">API key</Label>
           <span className="font-mono text-sm tabular-nums text-fg-1">
             {maskApiKey(project.apiKey)}
           </span>
@@ -49,10 +49,10 @@ export function ProjectHeader({ project }: { project: Project }) {
             )}
           </button>
         </div>
-        <span className="hidden h-4 w-px bg-bg-3 lg:inline" aria-hidden />
+        <span className="hidden h-4 w-px bg-bg-3 @4xl:inline" aria-hidden />
         <Link
           href={`/projects/${project.id}/settings`}
-          className="hidden items-center gap-1.5 font-mono text-2xs uppercase tracking-widest text-fg-1 transition-colors duration-100 hover:text-brand lg:inline-flex"
+          className="hidden items-center gap-1.5 font-mono text-2xs uppercase tracking-widest text-fg-1 transition-colors duration-100 hover:text-brand @4xl:inline-flex"
         >
           <Settings size={14} strokeWidth={1.75} />
           Settings

@@ -51,7 +51,7 @@ export function IssueHeader({
   };
 
   return (
-    <div className="flex h-14 shrink-0 items-center justify-between gap-6 border-b border-border-ghost px-6">
+    <div className="@container flex h-14 shrink-0 items-center justify-between gap-6 border-b border-border-ghost px-6">
       <div className="flex min-w-0 items-center gap-2 font-mono text-2xs uppercase tracking-widest text-fg-2">
         <Link
           href="/dashboard"
@@ -95,11 +95,11 @@ export function IssueHeader({
           href={`/projects/${issue.projectId}/settings`}
           aria-label="Project settings"
           title="Project settings"
-          className={cn(iconButtonVariants(), 'hidden lg:inline-flex')}
+          className={cn(iconButtonVariants(), 'hidden @5xl:inline-flex')}
         >
           <Settings size={15} strokeWidth={1.75} />
         </Link>
-        <IconButton label="Notifications" className="hidden lg:inline-flex">
+        <IconButton label="Notifications" className="hidden @5xl:inline-flex">
           <Bell size={15} strokeWidth={1.75} />
         </IconButton>
       </div>
@@ -149,7 +149,7 @@ export function IssueHeader({
 
 function Separator() {
   return (
-    <span className="mx-1 hidden h-4 w-px bg-bg-3 lg:inline" aria-hidden />
+    <span className="mx-1 hidden h-4 w-px bg-bg-3 @5xl:inline" aria-hidden />
   );
 }
 

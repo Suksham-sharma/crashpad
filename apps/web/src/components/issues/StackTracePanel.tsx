@@ -69,24 +69,20 @@ const frameShell = (isActive: boolean) =>
 function FrameHead({
   fn,
   location,
-  locationClass,
   children,
 }: {
   fn: string;
   location: string;
-  locationClass: string;
   children?: React.ReactNode;
 }) {
   return (
-    <div className="flex items-baseline justify-between gap-3">
-      <div className="min-w-0">
+    <div className="flex flex-col gap-1 @sm:flex-row @sm:items-baseline @sm:justify-between @sm:gap-3">
+      <div className="min-w-0 truncate">
         <span className="font-mono text-2xs text-fg-2">at </span>
         <span className="font-mono text-2xs font-medium text-fg-0">{fn}</span>
         {children}
       </div>
-      <span
-        className={cn('truncate font-mono text-2xs text-fg-2', locationClass)}
-      >
+      <span className="min-w-0 truncate font-mono text-2xs text-fg-2 @sm:shrink-0 @sm:basis-1/2 @sm:text-right">
         {location}
       </span>
     </div>
@@ -105,7 +101,6 @@ function StackFrameRow({
       <FrameHead
         fn={frame.fn}
         location={`${shortenFile(frame.file)}:${frame.line}`}
-        locationClass="max-w-[180px]"
       />
     </div>
   );
@@ -134,7 +129,7 @@ function ResolvedFrameRow({
   return (
     <div className={frameShell(isActive)}>
       <div className="px-4 py-3">
-        <FrameHead fn={fn} location={location} locationClass="max-w-[280px]">
+        <FrameHead fn={fn} location={location}>
           {!isResolved && (
             <Label size="xs" className="ml-2">
               raw
