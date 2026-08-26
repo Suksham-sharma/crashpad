@@ -7,3 +7,7 @@ bun.lock
 *.log
 .env*
 spike
+
+# Next.js rewrites this on build (adds its generated types to "include").
+# Letting Prettier reformat it starts a churn loop between the two.
+apps/web/tsconfig.json

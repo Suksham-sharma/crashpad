@@ -9,6 +9,11 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // A verification build must not write into the dev server's .next. They share
+  // the directory, and a production build replaces chunks the running dev
+  // server has already mapped, so the next request 404s on a chunk id that no
+  // longer exists. `bun run build:check` sets this.
+  distDir: process.env.NEXT_DIST_DIR ?? '.next',
   transpilePackages: ['@crashpad/sdk'],
   // Pin the workspace root to the crashpad monorepo. Without this, Next.js
   // walks up the tree and picks up stray lockfiles (e.g. ~/pnpm-lock.yaml)
