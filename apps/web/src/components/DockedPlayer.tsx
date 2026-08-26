@@ -227,7 +227,7 @@ export const DockedPlayer = forwardRef<DockedPlayerHandle, Props>(
           <div className="pointer-events-none absolute left-3 top-3 z-10 inline-flex items-center gap-1.5 h-6 px-2 bg-error/12 text-error font-mono text-3xs font-bold uppercase tracking-widest">
             <span
               className={clsx(
-                'w-1.5 h-1.5 bg-[color:var(--color-error)]',
+                'w-1.5 h-1.5 bg-error',
                 playing && 'animate-pulse',
               )}
               aria-hidden
@@ -380,7 +380,7 @@ function ScrubBar({
             aria-hidden
             className={clsx(
               'absolute top-1/2 -translate-y-1/2 w-[2px] h-2',
-              isError ? 'bg-[color:var(--color-error)]' : 'bg-fg-2',
+              isError ? 'bg-error' : 'bg-fg-2',
             )}
             style={{ left: `calc(${left}% - 1px)` }}
           />
@@ -439,7 +439,7 @@ function ClickPings({
     visible.push(
       <div
         key={`ping-${c.t}-${i}`}
-        className="absolute rounded-full bg-[color:var(--color-error)]"
+        className="absolute rounded-full bg-error"
         style={{
           left: sx - PING_SIZE / 2,
           top: sy - PING_SIZE / 2,

@@ -12,6 +12,7 @@ import { issueRoutes } from './routes/issues';
 import { streamRoutes } from './routes/stream';
 import { briefDeliveryRoutes, fixRoutes } from './routes/fix';
 import { sweepStuckFixRuns } from './controllers/fix';
+import { devLoginEnabled, devRoutes } from './routes/dev';
 
 async function dbHealthy(): Promise<boolean> {
   try {
@@ -60,11 +61,18 @@ const app = new Elysia({
   .use(streamRoutes)
   .use(fixRoutes)
   .use(briefDeliveryRoutes)
+  .use(devLoginEnabled ? devRoutes : new Elysia())
   .listen(env.PORT);
 
 console.log(
   `crashpad-api listening at http://${app.server?.hostname}:${app.server?.port}`,
 );
+
+if (devLoginEnabled) {
+  console.warn(
+    `[dev] AUTH BYPASS IS ON. GET ${env.PUBLIC_API_URL}/api/v1/dev/login signs in without GitHub. Never set DEV_LOGIN in production.`,
+  );
+}
 
 sweepStuckFixRuns()
   .then((n) => {
