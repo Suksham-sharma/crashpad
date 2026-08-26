@@ -42,3 +42,64 @@ export function formatError(
   if (err instanceof Error) return err.message;
   return fallback;
 }
+
+export function prettyUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    const path = u.pathname + (u.search || '');
+    return `${u.host}${path}`;
+  } catch {
+    return url;
+  }
+}
+
+export function formatDuration(ms: number): string {
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  return `${(ms / 1000).toFixed(2)}s`;
+}
+
+export function formatOffset(ms: number): string {
+  const total = ms / 1000;
+  return `+${total.toFixed(2)}s`;
+}
+
+export function cleanPath(file: string): string {
+  return file.replace(/^\.\/+/, '').replace(/^\/+/, '');
+}
+
+export function shortenFile(file: string): string {
+  try {
+    const url = new URL(file);
+    return url.pathname.split('/').pop() || url.pathname;
+  } catch {
+    return file.split('/').pop() || file;
+  }
+}
+
+export function parseBrowser(ua: string): string {
+  const m =
+    ua.match(/(Edg|OPR|Chrome|Safari|Firefox)\/(\d+)/) ||
+    ua.match(/(Version)\/(\d+)/);
+  if (!m) return ua;
+  const name = m[1] === 'Edg' ? 'Edge' : m[1] === 'OPR' ? 'Opera' : m[1];
+  return `${name} ${m[2]}`;
+}
+
+export function parseOS(ua: string): string {
+  if (/Windows NT/.test(ua)) return 'Windows';
+  if (/Mac OS X ([\d_.]+)/.test(ua)) {
+    const v = ua.match(/Mac OS X ([\d_]+)/)?.[1]?.replace(/_/g, '.');
+    return v ? `macOS ${v}` : 'macOS';
+  }
+  if (/Android/.test(ua)) return 'Android';
+  if (/iPhone|iPad|iPod/.test(ua)) return 'iOS';
+  if (/Linux/.test(ua)) return 'Linux';
+  return ua;
+}
+
+export function formatUtc(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())} UTC`;
+}

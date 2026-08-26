@@ -1,16 +1,28 @@
 import * as React from 'react';
+import { cva, type VariantProps } from 'class-variance-authority';
 
 import { cn } from '@/lib/cn';
 import { Label } from '@/components/ui/label';
 
-function Panel({ className, ...props }: React.ComponentProps<'section'>) {
+const panelVariants = cva('flex min-h-0 flex-col', {
+  variants: {
+    variant: {
+      bordered: 'border border-border-ghost bg-bg-0',
+      bare: '',
+    },
+  },
+  defaultVariants: { variant: 'bordered' },
+});
+
+function Panel({
+  className,
+  variant,
+  ...props
+}: React.ComponentProps<'section'> & VariantProps<typeof panelVariants>) {
   return (
     <section
       data-slot="panel"
-      className={cn(
-        'flex min-h-0 flex-col border border-border-ghost bg-bg-0',
-        className,
-      )}
+      className={cn(panelVariants({ variant }), className)}
       {...props}
     />
   );
@@ -62,4 +74,4 @@ function PanelBody({ className, ...props }: React.ComponentProps<'div'>) {
   );
 }
 
-export { Panel, PanelHeader, PanelTitle, PanelMeta, PanelBody };
+export { Panel, PanelHeader, PanelTitle, PanelMeta, PanelBody, panelVariants };
