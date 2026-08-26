@@ -4,7 +4,7 @@ import { useParams } from 'next/navigation';
 import { useCallback, useRef, useState } from 'react';
 
 import { formatError } from '@/lib/format';
-import { type DockedPlayerHandle } from '@/components/DockedPlayer';
+import { type DockedPlayerHandle } from '@/components/replay/DockedPlayer';
 import { BottomTabs, type TabId } from '@/components/issues/BottomTabs';
 import { EvidencePanel } from '@/components/issues/EvidencePanel';
 import { IssueHeader } from '@/components/issues/IssueHeader';
@@ -47,7 +47,7 @@ export default function IssueDetailPage() {
     <main className="flex h-[calc(100vh-var(--nav-height))] flex-col overflow-hidden">
       <IssueHeader detail={data} onOpenFix={() => setTab('fix')} />
       <IssueTitle detail={data} />
-      <div className="grid min-h-0 flex-1 grid-cols-[1fr_440px] grid-rows-[1fr] gap-px bg-border-ghost">
+      <div className="grid min-h-[var(--replay-min)] flex-1 grid-cols-[1fr_440px] grid-rows-[1fr] gap-px bg-border-ghost">
         <div className="min-h-0 min-w-0 overflow-hidden bg-bg-0">
           <ReplayPane
             detail={data}

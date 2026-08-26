@@ -9,6 +9,7 @@ const iconButtonVariants = cva(
     variants: {
       variant: {
         ghost: 'text-fg-2 hover:text-fg-0',
+        brand: 'text-brand hover:text-brand/70',
         surface: 'bg-bg-2 text-fg-0 hover:bg-bg-3',
         outline: 'border border-bg-3 text-fg-1 hover:bg-bg-2 hover:text-fg-0',
       },

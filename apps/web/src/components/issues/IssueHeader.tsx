@@ -51,7 +51,7 @@ export function IssueHeader({
   };
 
   return (
-    <div className="flex h-14 items-center justify-between gap-6 border-b border-border-ghost px-6">
+    <div className="flex h-14 shrink-0 items-center justify-between gap-6 border-b border-border-ghost px-6">
       <div className="flex min-w-0 items-center gap-2 font-mono text-2xs uppercase tracking-widest text-fg-2">
         <Link
           href="/dashboard"

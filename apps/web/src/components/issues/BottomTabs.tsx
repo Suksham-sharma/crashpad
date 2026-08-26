@@ -59,7 +59,7 @@ export function BottomTabs({
   return (
     <section
       className={cn(
-        'flex shrink-0 flex-col border-t border-border-ghost transition-[height] duration-150',
+        'flex flex-col border-t border-border-ghost transition-[height] duration-150',
         expanded ? 'h-[60vh]' : 'h-[30vh]',
       )}
     >

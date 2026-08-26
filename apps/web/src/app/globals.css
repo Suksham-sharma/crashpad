@@ -59,6 +59,7 @@
   --duration-instant: 100ms;
 
   --nav-height: 60px;
+  --replay-min: 240px;
 
   --color-background: var(--color-bg-void);
   --color-foreground: var(--color-fg-0);

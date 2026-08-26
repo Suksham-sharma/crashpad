@@ -41,7 +41,7 @@ import {
 import { Row } from '@/components/ui/row';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Copy, RotateCw, X } from 'lucide-react';
+import { Copy, Play, RotateCw, X } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -121,6 +121,7 @@ export default function PreviewPage() {
               <Badge variant="outline">v1.4.0</Badge>
               <Badge variant="error">Failed</Badge>
               <Badge variant="warning">Degraded</Badge>
+              <Badge variant="scrim">Paused</Badge>
             </div>
             <div className="flex flex-wrap items-center gap-4">
               <Badge variant="bare">
@@ -164,6 +165,9 @@ export default function PreviewPage() {
               </IconButton>
               <IconButton label="Copy" size="md" variant="surface">
                 <Copy />
+              </IconButton>
+              <IconButton label="Play" variant="brand">
+                <Play />
               </IconButton>
             </div>
           </Cell>

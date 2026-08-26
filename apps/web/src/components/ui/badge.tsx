@@ -12,6 +12,7 @@ const badgeVariants = cva(
         surface: 'bg-bg-2 text-fg-1',
         outline: 'border border-bg-3 text-fg-1',
         error: 'bg-error/10 text-error',
+        scrim: 'bg-bg-0/80 text-fg-2',
         warning: 'bg-warning/10 text-warning',
         bare: 'text-fg-0',
       },

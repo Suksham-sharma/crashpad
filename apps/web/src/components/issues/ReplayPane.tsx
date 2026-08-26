@@ -1,7 +1,7 @@
 import {
   DockedPlayer,
   type DockedPlayerHandle,
-} from '@/components/DockedPlayer';
+} from '@/components/replay/DockedPlayer';
 import { Label } from '@/components/ui/label';
 import type { IssueDetail } from '@/queries/issues';
 
