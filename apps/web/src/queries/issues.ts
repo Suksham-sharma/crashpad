@@ -179,6 +179,25 @@ export function useIssue(issueId: string) {
   });
 }
 
+export function useSetIssueStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      issueId,
+      status,
+    }: {
+      issueId: string;
+      status: IssueStatus;
+    }) => api.patch<{ issue: Issue }>(`/issues/${issueId}`, { status }),
+    onSuccess: ({ issue }) => {
+      qc.setQueryData<IssueDetail>(issueKeys.detail(issue.id), (prev) =>
+        prev ? { ...prev, issue } : prev,
+      );
+      qc.invalidateQueries({ queryKey: issueKeys.byProject(issue.projectId) });
+    },
+  });
+}
+
 export function useUpdateIssueStatus(issueId: string) {
   const qc = useQueryClient();
   return useMutation({

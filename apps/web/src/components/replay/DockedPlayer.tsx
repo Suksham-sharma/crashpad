@@ -21,6 +21,7 @@ import { Dot } from '@/components/ui/dot';
 import { IconButton } from '@/components/ui/icon-button';
 import { Label } from '@/components/ui/label';
 import { ClickPings } from '@/components/replay/ClickPings';
+import { coalesceMarkers, stepToMarker } from '@/components/replay/markers';
 import { ScrubBar } from '@/components/replay/ScrubBar';
 import {
   extractClicks,
@@ -70,6 +71,10 @@ export const DockedPlayer = forwardRef<DockedPlayerHandle, Props>(
       [rrwebData],
     );
     const clicks = useMemo(() => extractClicks(rrwebData), [rrwebData]);
+    const stepTargets = useMemo(
+      () => coalesceMarkers(markerOffsets),
+      [markerOffsets],
+    );
 
     useLayoutEffect(() => {
       if (!recordedDims) return;
@@ -187,8 +192,49 @@ export const DockedPlayer = forwardRef<DockedPlayerHandle, Props>(
       replayerRef.current?.setConfig({ speed: s });
     }, []);
 
+    const onKeyDown = useCallback(
+      (e: React.KeyboardEvent) => {
+        if (!ready) return;
+        if (e.metaKey || e.ctrlKey || e.altKey) return;
+        if (e.target instanceof HTMLInputElement) return;
+
+        if (e.key === ' ') {
+          e.preventDefault();
+          togglePlay();
+          return;
+        }
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+          e.preventDefault();
+          seek(
+            stepToMarker(
+              stepTargets,
+              currentMs,
+              e.key === 'ArrowRight' ? 1 : -1,
+              e.shiftKey ? 5 : 1,
+              durationMs,
+            ),
+          );
+          return;
+        }
+        const asSpeed = Number(e.key);
+        if (SPEEDS.includes(asSpeed as Speed)) {
+          e.preventDefault();
+          changeSpeed(asSpeed as Speed);
+        }
+      },
+      [
+        ready,
+        togglePlay,
+        seek,
+        stepTargets,
+        currentMs,
+        durationMs,
+        changeSpeed,
+      ],
+    );
+
     return (
-      <div className="flex h-full flex-col">
+      <div className="flex h-full flex-col" onKeyDown={onKeyDown}>
         <div className="relative min-h-0 flex-1 overflow-hidden bg-bg-0">
           <div
             ref={stageRef}
@@ -292,7 +338,7 @@ export const DockedPlayer = forwardRef<DockedPlayerHandle, Props>(
           <ScrubBar
             currentMs={currentMs}
             durationMs={durationMs}
-            markerOffsets={markerOffsets}
+            markerOffsets={stepTargets}
             errorOffsetMs={errorOffsetMs}
             onChange={handleScrubChange}
             disabled={!ready}

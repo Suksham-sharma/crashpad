@@ -1,28 +1,101 @@
+'use client';
+
 import { ArrowRight } from 'lucide-react';
 import Link from 'next/link';
+import { useCallback } from 'react';
+import { toast } from 'sonner';
 
 import { cn } from '@/lib/cn';
-import { formatRelative } from '@/lib/format';
+import { formatError, formatRelative } from '@/lib/format';
+import { useRovingFocus } from '@/lib/use-roving-focus';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import type { Issue, IssueStatus } from '@/queries/issues';
+import {
+  useSetIssueStatus,
+  type Issue,
+  type IssueStatus,
+} from '@/queries/issues';
+
+const ROW_ACTIONS: Record<string, IssueStatus> = {
+  e: 'resolved',
+  i: 'ignored',
+};
 
 export function IssueList({ issues }: { issues: Issue[] }) {
+  const setStatus = useSetIssueStatus();
+
+  const applyStatus = useCallback(
+    (issue: Issue, status: IssueStatus) => {
+      setStatus.mutate(
+        { issueId: issue.id, status },
+        {
+          onSuccess: () =>
+            toast.success(
+              `${status === 'resolved' ? 'Resolved' : 'Ignored'} ${issue.title}`,
+              {
+                action: {
+                  label: 'Undo',
+                  onClick: () =>
+                    setStatus.mutate({ issueId: issue.id, status: 'open' }),
+                },
+              },
+            ),
+          onError: (err) => toast.error(formatError(err)),
+        },
+      );
+    },
+    [setStatus],
+  );
+
+  const onItemKeyDown = useCallback(
+    (key: string, index: number) => {
+      const status = ROW_ACTIONS[key];
+      const issue = issues[index];
+      if (!status || !issue) return;
+      applyStatus(issue, status);
+      return true;
+    },
+    [issues, applyStatus],
+  );
+
+  const { containerProps, getItemProps } = useRovingFocus<HTMLAnchorElement>({
+    count: issues.length,
+    onItemKeyDown,
+  });
+
   return (
     <div className="mx-auto max-w-screen-2xl pt-4">
-      <ul>
+      <ul aria-label="Issues" {...containerProps}>
         {issues.map((issue, i) => (
-          <IssueRow key={issue.id} issue={issue} zebra={i % 2 === 1} />
+          <IssueRow
+            key={issue.id}
+            issue={issue}
+            zebra={i % 2 === 1}
+            linkProps={getItemProps(i)}
+          />
         ))}
       </ul>
     </div>
   );
 }
 
-function IssueRow({ issue, zebra }: { issue: Issue; zebra: boolean }) {
+function IssueRow({
+  issue,
+  zebra,
+  linkProps,
+}: {
+  issue: Issue;
+  zebra: boolean;
+  linkProps: {
+    ref: (el: HTMLAnchorElement | null) => void;
+    tabIndex: number;
+    onFocus: () => void;
+  };
+}) {
   return (
     <li className={cn('group', zebra && 'bg-bg-1')}>
       <Link
+        {...linkProps}
         href={`/issues/${issue.id}`}
         className="flex items-stretch transition-colors duration-100 hover:bg-bg-2"
       >
