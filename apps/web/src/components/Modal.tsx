@@ -2,8 +2,10 @@
 
 import * as Dialog from '@radix-ui/react-dialog';
 import * as VisuallyHidden from '@radix-ui/react-visually-hidden';
-import clsx from 'clsx';
 import { X } from 'lucide-react';
+
+import { cn } from '@/lib/cn';
+import { IconButton } from '@/components/ui/icon-button';
 
 type ModalProps = {
   open: boolean;
@@ -66,17 +68,13 @@ export function ModalHeader({
   onClose?: () => void;
 }) {
   return (
-    <div className="flex items-center justify-between px-7 h-16 shrink-0 bg-bg-0 border-b border-bg-3">
+    <div className="flex h-14 shrink-0 items-center justify-between border-b border-bg-3 bg-bg-0 px-7">
       <div className="flex items-center gap-3 min-w-0">{children}</div>
       {onClose && (
         <Dialog.Close asChild>
-          <button
-            type="button"
-            aria-label="Close"
-            className="shrink-0 w-8 h-8 flex items-center justify-center text-fg-2 hover:text-fg-0 transition-colors duration-100"
-          >
+          <IconButton label="Close">
             <X size={18} strokeWidth={1.75} />
-          </button>
+          </IconButton>
         </Dialog.Close>
       )}
     </div>
@@ -92,7 +90,7 @@ export function ModalBody({
 }) {
   return (
     <div
-      className={clsx('px-7 py-8 flex flex-col gap-7 overflow-auto', className)}
+      className={cn('flex flex-col gap-7 overflow-auto px-7 py-8', className)}
     >
       {children}
     </div>
