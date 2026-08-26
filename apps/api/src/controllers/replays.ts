@@ -28,24 +28,63 @@ interface TimelineMarkers {
   eventOffsets: number[];
 }
 
+const RRWEB_FULL_SNAPSHOT = 2;
+const RRWEB_INCREMENTAL = 3;
+const RRWEB_META = 4;
+
+const SOURCE_MOUSE_INTERACTION = 2;
+const SOURCE_INPUT = 5;
+
+const CLICK_INTERACTIONS = new Set([2, 4, 7]);
+
+interface MaybeRrwebEvent {
+  type?: unknown;
+  timestamp?: unknown;
+  data?: { source?: unknown; type?: unknown };
+}
+
+function timestampOf(ev: unknown): number | null {
+  if (!ev || typeof ev !== 'object') return null;
+  const ts = (ev as MaybeRrwebEvent).timestamp;
+  return typeof ts === 'number' ? ts : null;
+}
+
+function isTimelineMarker(ev: unknown): boolean {
+  const e = ev as MaybeRrwebEvent;
+  if (e.type === RRWEB_META || e.type === RRWEB_FULL_SNAPSHOT) return true;
+  if (e.type !== RRWEB_INCREMENTAL) return false;
+  const source = e.data?.source;
+  if (source === SOURCE_INPUT) return true;
+  if (source !== SOURCE_MOUSE_INTERACTION) return false;
+  return CLICK_INTERACTIONS.has(e.data?.type as number);
+}
+
 function computeTimelineMarkers(
   stream: RrwebEventStream,
   errorTimestamp: number,
 ): TimelineMarkers {
-  const timestamps: number[] = [];
+  let bufferStartTimestamp: number | null = null;
+  const markerTimestamps: number[] = [];
+
   for (const ev of stream) {
-    if (
-      ev &&
-      typeof ev === 'object' &&
-      'timestamp' in ev &&
-      typeof (ev as { timestamp: unknown }).timestamp === 'number'
-    ) {
-      timestamps.push((ev as { timestamp: number }).timestamp);
+    const ts = timestampOf(ev);
+    if (ts === null) continue;
+    if (bufferStartTimestamp === null || ts < bufferStartTimestamp) {
+      bufferStartTimestamp = ts;
     }
+    if (isTimelineMarker(ev)) markerTimestamps.push(ts);
   }
-  const bufferStartTimestamp = timestamps[0] ?? errorTimestamp;
-  const eventOffsets = timestamps.map((t) => t - bufferStartTimestamp);
-  return { errorTimestamp, bufferStartTimestamp, eventOffsets };
+
+  const origin = bufferStartTimestamp ?? errorTimestamp;
+  const eventOffsets = markerTimestamps
+    .map((t) => t - origin)
+    .sort((a, b) => a - b);
+
+  return {
+    errorTimestamp,
+    bufferStartTimestamp: origin,
+    eventOffsets,
+  };
 }
 
 export async function ingestReplay(

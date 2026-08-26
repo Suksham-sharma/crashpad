@@ -1,4 +1,4 @@
-const MIN_MARKER_GAP_MS = 250;
+const MIN_MARKER_GAP_MS = 60;
 const STEP_EPSILON_MS = 20;
 const FALLBACK_STEP_MS = 1000;
 

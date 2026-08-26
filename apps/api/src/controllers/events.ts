@@ -54,8 +54,9 @@ function fingerprintOf(input: IngestEventInput): string {
   if (input.signal) {
     return computeFingerprint({
       errorType: input.errorType,
-      errorMessage: `${input.signal.selector} ${pathnameOf(input.metadata.url)}`,
+      errorMessage: pathnameOf(input.metadata.url),
       stackTrace: null,
+      signalSelector: input.signal.selector,
     });
   }
   return computeFingerprint(input);
