@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Dot } from '@/components/ui/dot';
 import { Label } from '@/components/ui/label';
+import { InlineCode } from '@/components/patterns/InlineCode';
 import {
   isFixRunActive,
   useFixRun,
@@ -136,9 +137,9 @@ export function FixPanel({ detail }: { detail: IssueDetail }) {
             Crashpad packages this issue into a bug report naming the element,
             the interaction trail, what did not happen, and the network and
             console activity around it. It then dispatches the{' '}
-            <FixCode>crashpad-fix</FixCode> workflow in your repository. The
-            agent runs in your CI, on your checkout, and opens the pull request
-            itself.
+            <InlineCode>crashpad-fix</InlineCode> workflow in your repository.
+            The agent runs in your CI, on your checkout, and opens the pull
+            request itself.
           </FixNote>
           <div className="flex items-center gap-3">
             <Button
@@ -291,13 +292,5 @@ function FixNote({
     >
       {children}
     </p>
-  );
-}
-
-function FixCode({ children }: { children: React.ReactNode }) {
-  return (
-    <code className="bg-bg-2 px-1 py-0.5 font-mono text-2xs text-fg-0">
-      {children}
-    </code>
   );
 }

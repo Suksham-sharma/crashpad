@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dot } from '@/components/ui/dot';
 import { Label } from '@/components/ui/label';
 import { CopyButton } from '@/components/patterns/CopyButton';
+import { InlineCode } from '@/components/patterns/InlineCode';
 import {
   FRAMEWORKS,
   FRAMEWORK_FILES,
@@ -298,12 +299,12 @@ function Troubleshooter() {
       </div>
       <ul className="flex flex-col gap-4 font-body text-xs text-fg-1">
         <TroubleshootItem>
-          Check your <InlineCode>apiKey</InlineCode> matches the one shown
-          above.
+          Check your <InlineCode surface="raised">apiKey</InlineCode> matches
+          the one shown above.
         </TroubleshootItem>
         <TroubleshootItem>
-          Make sure <InlineCode>Crashpad.init()</InlineCode> runs before the
-          error fires. Top of your app entry is safest.
+          Make sure <InlineCode surface="raised">Crashpad.init()</InlineCode>{' '}
+          runs before the error fires. Top of your app entry is safest.
         </TroubleshootItem>
         <TroubleshootItem>
           <p className="mb-2">Throw a manual test error from your console:</p>
@@ -313,14 +314,6 @@ function Troubleshooter() {
         </TroubleshootItem>
       </ul>
     </div>
-  );
-}
-
-function InlineCode({ children }: { children: React.ReactNode }) {
-  return (
-    <code className="bg-bg-4 px-1.5 py-0.5 font-mono text-2xs text-fg-0">
-      {children}
-    </code>
   );
 }
 
