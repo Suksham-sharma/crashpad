@@ -67,6 +67,7 @@ export function FilterBar({
               aria-hidden
             />
             <Input
+              data-slot="search-input"
               value={searchInput}
               onChange={(e) => onSearchInput(e.target.value)}
               placeholder="Search by title…"

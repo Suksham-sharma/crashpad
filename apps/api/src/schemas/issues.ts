@@ -8,6 +8,10 @@ export const issueIdParams = t.Object({
   id: t.String({ format: 'uuid' }),
 });
 
+export const searchIssuesQuery = t.Object({
+  q: t.Optional(t.String({ maxLength: 200 })),
+});
+
 export const listIssuesQuery = t.Object({
   page: t.Optional(t.Numeric({ minimum: 1 })),
   limit: t.Optional(t.Numeric({ minimum: 1, maximum: 100 })),

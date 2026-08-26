@@ -4,12 +4,14 @@ import { getProjectForUser } from '../controllers/projects';
 import {
   listIssuesForProject,
   getIssueDetail,
+  searchIssuesForUser,
   updateIssueStatus,
 } from '../controllers/issues';
 import { buildBrief } from '../controllers/brief';
 import {
   projectIssuesParams,
   listIssuesQuery,
+  searchIssuesQuery,
   issueIdParams,
   updateIssueBody,
 } from '../schemas/issues';
@@ -36,6 +38,13 @@ export const issueRoutes = new Elysia({ prefix: '/api/v1' })
       });
     },
     { params: projectIssuesParams, query: listIssuesQuery, auth: true },
+  )
+  .get(
+    '/issues/search',
+    async ({ user, query }) => ({
+      issues: await searchIssuesForUser(user.id, query.q ?? ''),
+    }),
+    { query: searchIssuesQuery, auth: true },
   )
   .get(
     '/issues/:id',

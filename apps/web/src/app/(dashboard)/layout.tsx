@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from '@/lib/auth-client';
+import { GlobalShortcuts } from '@/components/GlobalShortcuts';
 import { TopNav } from '@/components/TopNav';
 
 export default function DashboardLayout({
@@ -31,6 +32,7 @@ export default function DashboardLayout({
     <div className="min-h-screen">
       <TopNav />
       {children}
+      <GlobalShortcuts />
     </div>
   );
 }
