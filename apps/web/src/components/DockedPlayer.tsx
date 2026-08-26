@@ -224,7 +224,7 @@ export const DockedPlayer = forwardRef<DockedPlayerHandle, Props>(
           )}
           onClick={ready ? togglePlay : undefined}
         >
-          <div className="pointer-events-none absolute left-3 top-3 z-10 inline-flex items-center gap-1.5 h-6 px-2 bg-[rgba(239,68,68,0.12)] text-[color:var(--color-error)] font-mono text-3xs font-bold uppercase tracking-widest">
+          <div className="pointer-events-none absolute left-3 top-3 z-10 inline-flex items-center gap-1.5 h-6 px-2 bg-error/12 text-error font-mono text-3xs font-bold uppercase tracking-widest">
             <span
               className={clsx(
                 'w-1.5 h-1.5 bg-[color:var(--color-error)]',
