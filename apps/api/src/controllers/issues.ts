@@ -84,43 +84,6 @@ export async function listIssuesForProject(
   return { issues: rows, total: countResult[0]?.count ?? 0, page, limit };
 }
 
-export interface IssueSearchRow {
-  id: string;
-  title: string;
-  kind: IssueKind;
-  status: IssueStatus;
-  projectId: string;
-  projectName: string;
-  lastSeen: Date;
-}
-
-const SEARCH_LIMIT = 20;
-
-export async function searchIssuesForUser(
-  userId: string,
-  q: string,
-): Promise<IssueSearchRow[]> {
-  const term = q.trim();
-  const conditions = [eq(projects.userId, userId)];
-  if (term) conditions.push(ilike(issues.title, `%${escapeLike(term)}%`));
-
-  return db
-    .select({
-      id: issues.id,
-      title: issues.title,
-      kind: issues.kind,
-      status: issues.status,
-      projectId: projects.id,
-      projectName: projects.name,
-      lastSeen: issues.lastSeen,
-    })
-    .from(issues)
-    .innerJoin(projects, eq(projects.id, issues.projectId))
-    .where(and(...conditions))
-    .orderBy(desc(issues.lastSeen))
-    .limit(SEARCH_LIMIT);
-}
-
 export interface IssueDetail {
   issue: Issue;
   latestEvent: Event | null;

@@ -171,28 +171,6 @@ export function useProjectIssues(
   });
 }
 
-export interface IssueSearchRow {
-  id: string;
-  title: string;
-  kind: IssueKind;
-  status: IssueStatus;
-  projectId: string;
-  projectName: string;
-  lastSeen: string;
-}
-
-export function useIssueSearch(q: string, enabled: boolean) {
-  return useQuery({
-    queryKey: [...issueKeys.all, 'search', q] as const,
-    queryFn: () =>
-      api.get<{ issues: IssueSearchRow[] }>(
-        `/issues/search?q=${encodeURIComponent(q)}`,
-      ),
-    enabled,
-    placeholderData: keepPreviousData,
-  });
-}
-
 export function useIssue(issueId: string) {
   return useQuery({
     queryKey: issueKeys.detail(issueId),

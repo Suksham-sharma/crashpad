@@ -14,7 +14,6 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
     title: 'Global',
     scope: 'Anywhere except a text field',
     shortcuts: [
-      { chords: [['⌘', 'K']], action: 'Command palette' },
       { chords: [['/']], action: 'Focus search' },
       { chords: [['?']], action: 'This reference' },
       { chords: [['Esc']], action: 'Close overlay, clear focus' },
